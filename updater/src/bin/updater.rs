@@ -15,6 +15,7 @@ fn save(tour: &[usize]) {
     });
 }
 
+// remove and use rotate_right
 fn shift(slice: &mut [usize]) {
     let tmp = slice[slice.len()-1];
     for i in (0..slice.len()-1).rev() {
@@ -23,6 +24,7 @@ fn shift(slice: &mut [usize]) {
     slice[0] = tmp;
 }
 
+// remove and use rotate_left
 fn shiftl(slice: &mut [usize]) {
     let tmp = slice[0];
     for i in 0..slice.len()-1 {
