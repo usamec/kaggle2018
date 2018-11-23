@@ -4,7 +4,7 @@ use updater::*;
 
 fn main() {
     let nodes = load_poses();
-    let tour = load_tour("../outputs/working.csv");
+    let tour = load_tour("../outputs/workingx.csv");
     let primes = get_primes(nodes.len());
     println!("Hello, world! {:?} {:?}", nodes.len(), tour.len());
     println!("{:?}", &primes[..20]);

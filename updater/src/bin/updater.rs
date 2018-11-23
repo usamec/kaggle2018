@@ -141,7 +141,7 @@ fn full_optim(slice: &mut[usize], nodes: &[(f64,f64)], primes: &[bool], offset: 
 
 fn main() {
     let nodes = load_poses();
-    let tour = load_tour("../outputs/working.csv");
+    let tour = load_tour("../outputs/workingx.csv");
     let primes = get_primes(nodes.len());
     println!("Hello, world! {:?} {:?}", nodes.len(), tour.len());
     println!("{:?}", &primes[..20]);
@@ -152,9 +152,9 @@ fn main() {
     let mut cur_len = verify_and_calculate_len(&nodes, &current_tour, &primes);
 
 
-    for _outer_iter in 0..1000usize {
-        for iter in 0..100 {
-            let size = rng.gen_range(15, 36);
+    for _outer_iter in 0..1000000000000usize {
+        for iter in 0..10 {
+            let size = rng.gen_range(15, 25);
             let start = rng.gen_range(1, current_tour.len() - size - 1);
             //let start = (iter) % (current_tour.len() - size - 2) + 1;
             let end = start + size;
@@ -188,13 +188,14 @@ fn main() {
                 println!("iter {} {}", iter, cur_len);
             }
         }
-        for iter in 0..1_000_00 {
-            let temp = 0.1f64;
-            let size = rng.gen_range(2, 500);
+        for iter in 0..1_000_000 {
+            let temp = 0.01f64;
+            let size = rng.gen_range(2, 5000);
             let start = rng.gen_range(1, current_tour.len() - size - 1);
             let end = start + size;
-            let se_dist = dist(nodes[start], nodes[end-1]);
-            if se_dist < 1000.0 {
+            let a_dist = dist(nodes[tour[start]], nodes[tour[start-1]]);
+            let b_dist = dist(nodes[tour[start]], nodes[tour[end-1]]) + dist(nodes[tour[start-1]], nodes[tour[end-1]]);
+            if b_dist < 6.0*a_dist {
                 let op = rng.gen_range(0, if size > 2 { 3 } else { 3 });
 
                 let inner_op: Box<Fn(&mut [usize])> = match op {
@@ -217,7 +218,7 @@ fn main() {
                 }
                 let new_len = calculate_len(&nodes, &slice_and_padding, &primes, start - 1);
                 if new_len < old_len || ((old_len - new_len) / temp).exp() > rng.gen::<f64>() {
-                    println!("boom {} {} {} {} {} {}", op, old_len, new_len, old_len - new_len, iter, size);
+                    println!("boom {} {} {} {} {} {} {}", op, old_len, new_len, old_len - new_len, iter, size, b_dist / a_dist);
                     let mut new_tour = current_tour.clone();
                     {
                         let mut slice = &mut new_tour[start..end];
