@@ -1,0 +1,8 @@
+[package]
+name = "updater"
+version = "0.1.0"
+authors = ["Vlado Boza <vlado.boza@ceai.io>"]
+
+[dependencies]
+csv = "1"
+rand = "0.6"
