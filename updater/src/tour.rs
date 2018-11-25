@@ -204,9 +204,9 @@ impl Tour {
         }
 
         if !duplicate {
-            let diff = added.iter().map(|&(a, b)| dist(self.nodes[a], self.nodes[b])).sum::<f64>()
+            /*let diff = added.iter().map(|&(a, b)| dist(self.nodes[a], self.nodes[b])).sum::<f64>()
                 - removed.iter().map(|&(a, b)| dist(self.nodes[a], self.nodes[b])).sum::<f64>();
-            if diff < 5000.0 {
+            if diff < 5000.0*/ {
                 self.apply_changes(added, removed);
 
                 let ret = self.check_nodes_edges();
@@ -221,9 +221,9 @@ impl Tour {
                     self.apply_changes(removed, added);
                     None
                 }
-            } else {
+            }/* else {
                 None
-            }
+            }*/
         } else {
             None
         }
@@ -301,6 +301,13 @@ impl Tour {
                 if next_pos == removed_inds.len() - 1 {
                     break;
                 }
+                if next_pos == 0 {
+                    println!("rem {:?}", removed);
+                    println!("add {:?}", added);
+                    println!("rid {:?}", removed_inds);
+                    println!("aid {:?}", added_inds);
+                }
+                assert!(next_pos != 0);
                 if next_pos % 2 == 1 {
                     current = removed_inds[next_pos + 1];
                 } else {

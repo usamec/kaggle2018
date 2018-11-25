@@ -22,10 +22,21 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<usize>]) -> Option<Tour> {
 
     let mut current_vertex = start_vertex;
     for _ in 0..2 {
-        let next_vertex = *candidates[current_vertex].choose(&mut rng).unwrap();
+        let mut next_vertex = 0;
+        loop {
+            next_vertex = *candidates[current_vertex].choose(&mut rng).unwrap();
+            if next_vertex != 0 {
+                break;
+            }
+        }
         added.push((current_vertex, next_vertex));
 
-        current_vertex = tour.rand_neighbour(next_vertex);
+        loop {
+            current_vertex = tour.rand_neighbour(next_vertex);
+            if current_vertex != 0 {
+                break;
+            }
+        }
         removed.push((next_vertex, current_vertex));
     }
 
@@ -34,12 +45,20 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<usize>]) -> Option<Tour> {
     //println!("{:?}", removed);
     //println!("{:?}", added);
 
-    let test = tour.test_changes(&added, &removed);
-    if let Some((res, p)) = test {
-
-        //println!("{:?}", test);
-        if res < tour.get_len() {
-            Some(tour.make_new(p, ))
+    let test_fast = tour.test_changes_fast(&added, &removed);
+    if let Some(len) = test_fast {
+        if len < tour.get_len() {
+            let test = tour.test_changes(&added, &removed);
+            if let Some((res, p)) = test {
+                //println!("{:?}", test);
+                if res < tour.get_len() {
+                    Some(tour.make_new(p, ))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -51,7 +70,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<usize>]) -> Option<Tour> {
 fn main() {
     let nodes = Rc::new(load_poses());
     let primes = Rc::new(get_primes(nodes.len()));
-    let mut tour = Tour::new(load_tour("../outputs/kopt2.csv"), nodes.clone(), primes.clone());
+    let mut tour = Tour::new(load_tour("../outputs/candidate.csv"), nodes.clone(), primes.clone());
     let candidates = load_candidates();
     println!("Hello, world! {:?} {:?} {:?}", nodes.len(), tour.get_path().len(), candidates.len());
     println!("{:?}", &primes[..20]);
@@ -65,10 +84,10 @@ fn main() {
         if let Some(new_tour) = do_opt(&mut tour, &candidates) {
             println!("new len {}", new_tour.get_len());
             tour = new_tour;
-            tour.save("../outputs/kopt2.csv");
+            tour.save("../outputs/kopt4.csv");
         }
         cc += 1;
-        if cc % 10000 == 0 {
+        if cc % 1000000 == 0 {
             println!("cc {}", cc);
         }
     }
