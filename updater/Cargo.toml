@@ -6,3 +6,4 @@ authors = ["Vlado Boza <vlado.boza@ceai.io>"]
 [dependencies]
 csv = "1"
 rand = "0.6"
+assert_approx_eq = "1.0.0"

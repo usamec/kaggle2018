@@ -64,7 +64,7 @@ fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usi
                     }
                 }
 
-                if total_steps > 50000 {
+                if total_steps > 200000 {
                     break
                 }
             }

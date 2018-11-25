@@ -1,3 +1,4 @@
+#[macro_use] extern crate assert_approx_eq;
 extern crate rand;
 
 use std::fs::File;
@@ -8,10 +9,13 @@ use std::iter::FromIterator;
 
 mod local_brute;
 mod union_find;
+mod tour;
 
 pub use local_brute::full_optim;
 
 pub use union_find::UnionFind;
+
+pub use tour::Tour;
 
 pub fn load_poses() -> Vec<(f64,f64)> {
     let f = File::open("../inputs/cities.csv").expect("file not found");
@@ -21,6 +25,18 @@ pub fn load_poses() -> Vec<(f64,f64)> {
         let cur_line = line.unwrap();
         let parts = cur_line.split(",").collect::<Vec<_>>();
         out.push((parts[1].parse::<f64>().unwrap(), parts[2].parse::<f64>().unwrap()));
+    }
+    out
+}
+
+pub fn load_candidates() -> Vec<Vec<usize>> {
+    let f = File::open("../inputs/pi-nearest.txt").expect("file not found");
+    let file = BufReader::new(&f);
+    let mut out = Vec::new();
+    for line in file.lines() {
+        let cur_line = line.unwrap();
+        let part2 = cur_line.split(": ").skip(1).next().unwrap();
+        out.push(part2.split(" ").map(|x| x.parse().unwrap()).collect());
     }
     out
 }

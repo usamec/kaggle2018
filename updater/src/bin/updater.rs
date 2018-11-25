@@ -8,7 +8,7 @@ use rand::prelude::*;
 use updater::*;
 
 fn save(tour: &[usize]) {
-    let mut output = File::create("../outputs/test.csv").unwrap();
+    let mut output = File::create("../outputs/kopt-upd.csv").unwrap();
     writeln!(output, "Path");
     tour.iter().for_each(|x| {
         writeln!(output, "{}", x);
@@ -38,10 +38,8 @@ fn local_update<F>(size: usize, start: usize, temp: f64, nodes: &[(f64, f64)], c
             println!("new_len {}", new_len);
             if new_len < cur_len {
                 println!("better {:?}", new_len);
-                Some((new_tour, new_len))
-            } else {
-                None
             }
+            Some((new_tour, new_len))
         } else {
             None
         }
@@ -52,7 +50,7 @@ fn local_update<F>(size: usize, start: usize, temp: f64, nodes: &[(f64, f64)], c
 
 fn main() {
     let nodes = load_poses();
-    let tour = load_tour("../outputs/candidate.csv");
+    let tour = load_tour("../outputs/workingx.csv");
     let primes = get_primes(nodes.len());
     println!("Hello, world! {:?} {:?}", nodes.len(), tour.len());
     println!("{:?}", &primes[..20]);
@@ -63,9 +61,11 @@ fn main() {
     let mut cur_len = verify_and_calculate_len(&nodes, &current_tour, &primes);
 
 
-    for _outer_iter in 0..1000000000000usize {
-        for iter in 0..10 {
-            let size = rng.gen_range(35, 36);
+    for outer_iter in 0..1000usize {
+
+        // Bruteforce iterations
+        /*for iter in 0..100 {
+            let size = rng.gen_range(40, 41);
             let start = rng.gen_range(1, current_tour.len() - size - 1);
             let maybe_new_tour = local_update(size, start, 0.0, &nodes, &current_tour, cur_len, &primes, full_optim);
             if let Some((new_tour, new_len)) = maybe_new_tour {
@@ -78,19 +78,39 @@ fn main() {
             if iter % 10 == 0 {
                 println!("iter {} {}", iter, cur_len);
             }
-        }
+        }*/
 
-        for size in 2..10000 {
-            for start in 1..current_tour.len() - size - 1 {
-                let temp = 0.001f64;
-                //let size = rng.gen_range(2, 5000);
-                //let start = rng.gen_range(1, current_tour.len() - size - 1);
+        // Simple rotations
+        for _ in 0..50_000_000 {
+        /*for size in (20..500).rev() {
+            for start in 1..current_tour.len() - size - 1*/ {
+                let temp = 0.05f64;
+                let size = rng.gen_range(5, 500);
+                let start = rng.gen_range(1, current_tour.len() - size - 1);
                 let end = start + size;
-                let a_dist = dist(nodes[tour[start]], nodes[tour[start - 1]]);
-                let b_dist = dist(nodes[tour[start]], nodes[tour[end - 1]]) + dist(nodes[tour[start - 1]], nodes[tour[end - 1]]);
-                if b_dist < 6.0 * a_dist {
-                    let op = rng.gen_range(0, if size > 2 { 3 } else { 3 });
+                let op = rng.gen_range(0, if size > 2 { 3 } else { 3 });
+                let dist_before = match op {
+                    0 => dist(nodes[tour[start]], nodes[tour[start-1]]) + dist(nodes[tour[end-1]], nodes[tour[end]]),
+                    1 => dist(nodes[tour[start]], nodes[tour[start-1]]) +
+                         dist(nodes[tour[end-1]], nodes[tour[end-2]]) +
+                         dist(nodes[tour[end-1]], nodes[tour[end]]),
+                    _ => dist(nodes[tour[start]], nodes[tour[start-1]]) +
+                         dist(nodes[tour[start]], nodes[tour[start+1]]) +
+                         dist(nodes[tour[end-1]], nodes[tour[end]])
+                };
 
+                let dist_after = match op {
+                    0 => dist(nodes[tour[end]], nodes[tour[start-1]]) + dist(nodes[tour[start]], nodes[tour[end]]),
+                    1 => dist(nodes[tour[end-1]], nodes[tour[start-1]]) +
+                        dist(nodes[tour[end-1]], nodes[tour[start]]) +
+                        dist(nodes[tour[end-2]], nodes[tour[end]]),
+                    _ => dist(nodes[tour[start+1]], nodes[tour[start-1]]) +
+                        dist(nodes[tour[start]], nodes[tour[end-1]]) +
+                        dist(nodes[tour[end-1]], nodes[tour[start]])
+                };
+                /*let a_dist = dist(nodes[tour[start]], nodes[tour[start - 1]]);
+                let b_dist = dist(nodes[tour[start]], nodes[tour[end - 1]]) + dist(nodes[tour[start - 1]], nodes[tour[end - 1]]);*/
+                if dist_after < 6.0 * dist_before {
                     let maybe_new_tour = match op {
                         0 => local_update(size, start, temp, &nodes, &current_tour, cur_len, &primes, |x, _, _, _| {
                             let len = x.len();
@@ -112,16 +132,15 @@ fn main() {
                     if let Some((new_tour, new_len)) = maybe_new_tour {
                         cur_len = new_len;
                         current_tour = new_tour;
-                        println!("saving");
+                        println!("saving {}", op);
                         save(&current_tour);
                         println!("done");
                     }
                 }
             }
-            if size % 1000 == 0 {
-                println!("iter {} {}", size, cur_len);
-            }
-
+        }
+        /*if iter % 1000000000 == 0*/ {
+            println!("iter {} {}", outer_iter, cur_len);
         }
     }
 }
