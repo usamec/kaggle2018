@@ -50,7 +50,7 @@ fn local_update<F>(size: usize, start: usize, temp: f64, nodes: &[(f64, f64)], c
 
 fn main() {
     let nodes = load_poses();
-    let tour = load_tour("../outputs/workingx.csv");
+    let tour = load_tour("../outputs/best.csv");
     let primes = get_primes(nodes.len());
     println!("Hello, world! {:?} {:?}", nodes.len(), tour.len());
     println!("{:?}", &primes[..20]);
@@ -64,7 +64,7 @@ fn main() {
     for outer_iter in 0..1000usize {
 
         // Bruteforce iterations
-        /*for iter in 0..100 {
+        for iter in 0..10 {
             let size = rng.gen_range(40, 41);
             let start = rng.gen_range(1, current_tour.len() - size - 1);
             let maybe_new_tour = local_update(size, start, 0.0, &nodes, &current_tour, cur_len, &primes, full_optim);
@@ -78,13 +78,13 @@ fn main() {
             if iter % 10 == 0 {
                 println!("iter {} {}", iter, cur_len);
             }
-        }*/
+        }
 
         // Simple rotations
-        for _ in 0..50_000_000 {
-        /*for size in (20..500).rev() {
-            for start in 1..current_tour.len() - size - 1*/ {
-                let temp = 0.05f64;
+        //for _ in 0..50_000_000 {
+        for size in (2..500).rev() {
+            for start in 1..current_tour.len() - size - 1 {
+                let temp = 0.000005f64;
                 let size = rng.gen_range(5, 500);
                 let start = rng.gen_range(1, current_tour.len() - size - 1);
                 let end = start + size;

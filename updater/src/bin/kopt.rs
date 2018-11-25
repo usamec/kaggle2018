@@ -10,7 +10,7 @@ use rand::prelude::*;
 use std::collections::HashSet;
 
 
-fn do_opt(tour: &mut Tour, candidates: &[Vec<usize>], temp: f64) -> Option<Tour> {
+fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64) -> Option<Tour> {
     let mut rng = rand::thread_rng();
     let start_path_pos = rng.gen_range(1, tour.get_path().len() - 1);
     let start_vertex = tour.get_path()[start_path_pos];
@@ -26,7 +26,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<usize>], temp: f64) -> Option<Tour>
     for _ in 0..*[2,3,4,5].choose(&mut rng).unwrap() {
         let mut next_vertex = 0;
         loop {
-            next_vertex = *candidates[current_vertex].choose(&mut rng).unwrap();
+            next_vertex = candidates[current_vertex].choose_weighted(&mut rng, |x| x.1).unwrap().0;
             if next_vertex != 0 {
                 break;
             }
@@ -83,6 +83,9 @@ fn main() {
     let primes = Rc::new(get_primes(nodes.len()));
     let mut tour = Tour::new(load_tour("../outputs/best.csv"), nodes.clone(), primes.clone());
     let candidates = load_candidates();
+    let candidates_w = candidates.iter().enumerate().map(|(i, cc)| {
+        cc.iter().map(|&c| (c, 1.0 / dist(nodes[i], nodes[c]).ln_1p())).collect::<Vec<_>>()
+    }).collect::<Vec<_>>();
     println!("Hello, world! {:?} {:?} {:?}", nodes.len(), tour.get_path().len(), candidates.len());
     println!("{:?}", &primes[..20]);
     println!("{:?}", verify_and_calculate_len(&nodes, &tour.get_path(), &primes));
@@ -92,7 +95,7 @@ fn main() {
     let cur_len = verify_and_calculate_len(&nodes, &tour.get_path(), &primes);
     let mut cc = 0;
     loop {
-        if let Some(new_tour) = do_opt(&mut tour, &candidates, 0.01) {
+        if let Some(new_tour) = do_opt(&mut tour, &candidates_w,0.01) {
             //println!("new len {}", new_tour.get_len());
             tour = new_tour;
             tour.save("../outputs/kopt6.csv");
