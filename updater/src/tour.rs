@@ -58,7 +58,7 @@ impl TwoEdges {
 }
 
 pub struct Tour {
-    nodes: Rc<Vec<(f64,f64)>>,
+    pub nodes: Rc<Vec<(f64,f64)>>,
     primes: Rc<Vec<bool>>,
     path: Vec<usize>,
     inv: Vec<usize>,
