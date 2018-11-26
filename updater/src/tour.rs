@@ -1,6 +1,6 @@
 
 
-use std::rc::Rc;
+use std::sync::Arc;
 use rand::prelude::*;
 use dist;
 use verify_and_calculate_len;
@@ -10,6 +10,7 @@ use std::iter;
 
 const NOEDGE: usize = 123456789;
 
+#[derive(Clone)]
 struct TwoEdges {
     edges: [usize;2]
 }
@@ -57,9 +58,10 @@ impl TwoEdges {
     }
 }
 
+#[derive(Clone)]
 pub struct Tour {
-    pub nodes: Rc<Vec<(f64,f64)>>,
-    primes: Rc<Vec<bool>>,
+    pub nodes: Arc<Vec<(f64,f64)>>,
+    primes: Arc<Vec<bool>>,
     path: Vec<usize>,
     inv: Vec<usize>,
     per_nodes_edges: Vec<TwoEdges>,
@@ -81,7 +83,7 @@ fn path_to_edges(path: &[usize]) -> Vec<TwoEdges> {
 }
 
 impl Tour {
-    pub fn new(path: Vec<usize>, nodes: Rc<Vec<(f64, f64)>>, primes: Rc<Vec<bool>>) -> Tour {
+    pub fn new(path: Vec<usize>, nodes: Arc<Vec<(f64, f64)>>, primes: Arc<Vec<bool>>) -> Tour {
         let per_nodes_edges = path_to_edges(&path);
         let cur_len = verify_and_calculate_len(&nodes, &path, &primes);
         let mut inv = vec![0; nodes.len()];
@@ -344,7 +346,7 @@ mod tests {
     use rand::prelude::*;
     use Tour;
     use get_primes;
-    use std::rc::Rc;
+    use std::sync::Arc;
     use std::iter::FromIterator;
     use calculate_len;
 
@@ -359,7 +361,7 @@ mod tests {
 
         let primes = get_primes(100);
 
-        let mut tour = Tour::new(tour_path, Rc::new(nodes), Rc::new(primes));
+        let mut tour = Tour::new(tour_path, Arc::new(nodes), Arc::new(primes));
 
         let candidates = (0..100usize).map(|i| {
             (1..100usize).filter(|&j| j != i).collect::<Vec<_>>()
@@ -412,13 +414,13 @@ mod tests {
     #[test]
     fn test_dist() {
         let mut rng = rand::thread_rng();
-        let nodes = Rc::new((0..100).map(|x| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>());
+        let nodes = Arc::new((0..100).map(|x| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>());
 
         let mut tour_path = Vec::from_iter(0..100);
         tour_path[1..].shuffle(&mut rng);
         tour_path.push(0);
 
-        let primes = Rc::new(get_primes(100));
+        let primes = Arc::new(get_primes(100));
 
         let mut tour = Tour::new(tour_path, nodes.clone(), primes.clone());
 
@@ -436,14 +438,14 @@ mod tests {
     #[test]
     fn test_dist_rev() {
         let mut rng = rand::thread_rng();
-        let nodes = Rc::new((0..100).map(|x| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>());
+        let nodes = Arc::new((0..100).map(|x| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>());
 
         let mut tour_path = Vec::from_iter(0..100);
         tour_path[1..].shuffle(&mut rng);
         tour_path.push(0);
         println!("{:?}", tour_path);
 
-        let primes = Rc::new(get_primes(100));
+        let primes = Arc::new(get_primes(100));
 
         let mut tour = Tour::new(tour_path, nodes.clone(), primes.clone());
 
