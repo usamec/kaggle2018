@@ -17,6 +17,9 @@ pub use union_find::UnionFind;
 
 pub use tour::Tour;
 
+pub const PENALTY: f64 = 1.1;
+pub const MIN_DIST_PENALTY: f64 = 0.0;
+
 pub fn load_poses() -> Vec<(f64,f64)> {
     let f = File::open("../inputs/cities.csv").expect("file not found");
     let file = BufReader::new(&f);
@@ -79,8 +82,8 @@ pub fn verify_and_calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[
 
     for i in 0..tour.len()-1 {
         let mut current_len = dist(nodes[tour[i]], nodes[tour[i+1]]);
-        if (i + 1) % 10 == 0 && !primes[tour[i]] {
-            current_len *= 1.1;
+        if (i + 1) % 10 == 0 && !primes[tour[i]] && current_len >= MIN_DIST_PENALTY {
+            current_len *= PENALTY;
         }
         total_len += current_len;
     }
@@ -92,8 +95,8 @@ pub fn calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[bool], offs
 
     for i in 0..tour.len()-1 {
         let mut current_len = dist(nodes[tour[i]], nodes[tour[i+1]]);
-        if (i + 1 + offset) % 10 == 0 && !primes[tour[i]] {
-            current_len *= 1.1;
+        if (i + 1 + offset) % 10 == 0 && !primes[tour[i]]  && current_len >= MIN_DIST_PENALTY {
+            current_len *= PENALTY;
         }
         total_len += current_len;
     }

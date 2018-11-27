@@ -1,5 +1,6 @@
 use dist;
 use UnionFind;
+use super::PENALTY;
 use calculate_len;
 use rand::prelude::*;
 
@@ -39,7 +40,7 @@ fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usi
         if left.is_empty() {
             let mut current_len = dist(nodes[cur], nodes[target]);
             if (offset + 1) % 10 == 0 && !primes[cur] {
-                current_len *= 1.1;
+                current_len *= PENALTY;
             }
             (Some((vec!(cur, target), current_len)), 1)
         } else {
@@ -51,7 +52,7 @@ fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usi
             for &next in left.iter() {
                 let mut current_len = dist(nodes[cur], nodes[next]);
                 if (offset + 1) % 10 == 0 && !primes[cur] {
-                    current_len *= 1.1;
+                    current_len *= PENALTY;
                 }
                 let mut left2 = left.iter().filter(|&&x| x != next).map(|x| *x).collect::<Vec<_>>();
                 let (maybe_res, steps) = full_optim_inner(next, left2, target, offset + 1, nodes, primes, upper_bound - current_len);
@@ -64,7 +65,8 @@ fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usi
                     }
                 }
 
-                if total_steps > 200000 {
+                if total_steps > 2000000 {
+                    println!("out! {}", total_steps);
                     break
                 }
             }

@@ -50,7 +50,7 @@ fn local_update<F>(size: usize, start: usize, temp: f64, nodes: &[(f64, f64)], c
 
 fn main() {
     let nodes = load_poses();
-    let tour = load_tour("../outputs/best.csv");
+    let tour = load_tour("../outputs/workingx.csv");
     let primes = get_primes(nodes.len());
     println!("Hello, world! {:?} {:?}", nodes.len(), tour.len());
     println!("{:?}", &primes[..20]);
@@ -60,8 +60,19 @@ fn main() {
     let mut rng = rand::thread_rng();
     let mut cur_len = verify_and_calculate_len(&nodes, &current_tour, &primes);
 
+    let size = 40;
+    let start = 180120;
+    let maybe_new_tour = local_update(size, start, 0.0, &nodes, &current_tour, cur_len, &primes, full_optim);
+    if let Some((new_tour, new_len)) = maybe_new_tour {
+        cur_len = new_len;
+        current_tour = new_tour;
+        println!("saving");
+        save(&current_tour);
+        println!("done");
+    }
 
-    for outer_iter in 0..1000usize {
+
+    /*for outer_iter in 0..1000usize {
 
         // Bruteforce iterations
         for iter in 0..10 {
@@ -142,5 +153,5 @@ fn main() {
         /*if iter % 1000000000 == 0*/ {
             println!("iter {} {}", outer_iter, cur_len);
         }
-    }
+    }*/
 }

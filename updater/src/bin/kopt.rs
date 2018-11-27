@@ -10,6 +10,7 @@ use rand::prelude::*;
 use std::collections::HashSet;
 use std::sync::{Mutex, Arc};
 use std::thread;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 
 fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64) -> Option<Tour> {
@@ -25,7 +26,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64) -> Optio
     let mut current_vertex = start_vertex;
     let mut removed_sum = dist(tour.nodes[start_vertex], tour.nodes[start_vertex2]);
     let mut added_sum = 0.0;
-    for _ in 0..*[2,3,4,5].choose(&mut rng).unwrap() {
+    for _ in 0..*[2,3,4].choose(&mut rng).unwrap() {
         let mut next_vertex = 0;
         loop {
             next_vertex = candidates[current_vertex].choose_weighted(&mut rng, |x| x.1).unwrap().0;
@@ -36,9 +37,9 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64) -> Optio
         added_sum += dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
         added.push((current_vertex, next_vertex));
 
-        if added_sum - removed_sum > 10.0 {
+        /*if added_sum - removed_sum > 10.0 {
             return None
-        }
+        }*/
 
 
         loop {
@@ -55,9 +56,9 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64) -> Optio
     added.push((current_vertex, start_vertex2));
     added_sum += dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
 
-    if added_sum - removed_sum > 10.0 {
+    /*if added_sum - removed_sum > 10.0 {
         return None
-    }
+    }*/
 
     /*if rng.gen_range(0, 1) == 0 {
         println!("diff {}", added_sum - removed_sum);
@@ -114,49 +115,64 @@ fn local_update<F>(size: usize, start: usize, temp: f64, nodes: &[(f64, f64)], c
 }
 
 fn main() {
-    let n_threads = 10;
+    let n_threads = 2;
     let nodes = Arc::new(load_poses());
     let primes = Arc::new(get_primes(nodes.len()));
-    let tour = Arc::new(Mutex::new(Tour::new(load_tour("../outputs/kopt6-0.csv"), nodes.clone(), primes.clone())));
+    let tour = Arc::new(Mutex::new(Tour::new(load_tour("../outputs/koptx-0.csv"), nodes.clone(), primes.clone())));
     let candidates = load_candidates();
     let candidates_w = candidates.iter().enumerate().map(|(i, cc)| {
-        cc.iter().map(|&c| (c, 1.0 / dist(nodes[i], nodes[c]).ln_1p())).collect::<Vec<_>>()
+        cc.iter().map(|&c| (c, 1.0 / dist(nodes[i], nodes[c]).sqrt())).collect::<Vec<_>>()
+        //cc.iter().map(|&c| (c, 1.0)).collect::<Vec<_>>()
     }).collect::<Vec<_>>();
     println!("Hello, world! {:?} {:?} {:?}", nodes.len(), tour.lock().unwrap().get_path().len(), candidates.len());
     println!("{:?}", &primes[..20]);
     println!("{:?}", verify_and_calculate_len(&nodes, &tour.lock().unwrap().get_path(), &primes));
     println!("{:?}", tour.lock().unwrap().check_nodes_edges().unwrap().0);
 
+    let tour_hash = Arc::new(AtomicUsize::new(tour.lock().unwrap().hash()));
+
     let mut handles = vec![];
     for thread_id in 0..n_threads {
         let main_tour_mutex = Arc::clone(&tour);
+        let main_tour_hash = Arc::clone(&tour_hash);
         let our_candidates = candidates_w.clone();
         let handle = thread::spawn(move || {
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
+            let mut our_tour_hash = our_tour.hash();
             loop {
                 if let Some(new_tour) = do_opt(&mut our_tour, &our_candidates,0.01) {
                     //println!("new len {}", new_tour.get_len());
                     our_tour = new_tour;
+                    our_tour_hash = our_tour.hash();
                     let mut main_tour = main_tour_mutex.lock().unwrap();
                     *main_tour = our_tour.clone();
-                    our_tour.save(&format!("../outputs/kopt6-{}.csv", thread_id));
+                    main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
+                    our_tour.save(&format!("../outputs/koptx-{}.csv", thread_id));
                 }
                 cc += 1;
                 if cc % 1000000 == 0 {
+                    println!("cc {} {}", cc, thread_id);
+                }
+                if main_tour_hash.load(Ordering::Relaxed) != our_tour_hash {
+                    println!("reload {} {}", thread_id, cc);
                     let main_tour = main_tour_mutex.lock().unwrap();
                     our_tour = main_tour.clone();
-                    println!("cc {}", cc);
+                    our_tour_hash = our_tour.hash();
                 }
+
             }
         });
         handles.push(handle);
     }
 
-    for thread_id in 0..n_threads {
+
+
+    for thread_id in 0..n_threads/2 {
         let main_tour_mutex = Arc::clone(&tour);
         let our_nodes = nodes.clone();
         let our_primes = primes.clone();
+        let main_tour_hash = Arc::clone(&tour_hash);
         let handle = thread::spawn(move || {
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().get_path().to_vec();
@@ -172,6 +188,7 @@ fn main() {
                     our_tour = new_tour;
                     let mut main_tour = main_tour_mutex.lock().unwrap();
                     *main_tour = Tour::new(our_tour.clone(), our_nodes.clone(), our_primes.clone());
+                    main_tour_hash.store(main_tour.hash(), Ordering::Relaxed);
                 }
                 cc += 1;
                 let main_tour = main_tour_mutex.lock().unwrap();

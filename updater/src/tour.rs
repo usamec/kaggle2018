@@ -7,6 +7,10 @@ use verify_and_calculate_len;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter;
+use super::{PENALTY, MIN_DIST_PENALTY};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 const NOEDGE: usize = 123456789;
 
@@ -100,16 +104,17 @@ impl Tour {
         let mut prefix_lens_offset = [vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0]];
         let mut prefix_lens_offset_rev = [vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0]];
         for i in 0..path.len()-1 {
+            let current_len = dist(nodes[path[i]], nodes[path[i+1]]);
             for j in 0..10 {
-                let ll = prefix_lens_offset[j].last().unwrap() + if (i + 1 + j) % 10 == 0 && !primes[path[i]] {
-                    dist(nodes[path[i]], nodes[path[i+1]]) * 0.1
+                let ll = prefix_lens_offset[j].last().unwrap() + if (i + 1 + j) % 10 == 0 && !primes[path[i]] && current_len >= MIN_DIST_PENALTY  {
+                    current_len * (PENALTY - 1.0)
                 } else {
                     0.0
                 };
                 prefix_lens_offset[j].push(ll);
 
-                let ll = prefix_lens_offset_rev[j].last().unwrap() + if (i + 1 + j) % 10 == 0 && !primes[path[i+1]] {
-                    dist(nodes[path[i]], nodes[path[i+1]]) * 0.1
+                let ll = prefix_lens_offset_rev[j].last().unwrap() + if (i + 1 + j) % 10 == 0 && !primes[path[i+1]] && current_len >= MIN_DIST_PENALTY {
+                    current_len * (PENALTY - 1.0)
                 } else {
                     0.0
                 };
@@ -118,6 +123,12 @@ impl Tour {
         }
 
         Tour { nodes, path, primes, inv, per_nodes_edges, cur_len, prefix_lens, prefix_lens_offset, prefix_lens_offset_rev }
+    }
+
+    pub fn hash(&self) -> usize {
+        let mut hash = DefaultHasher::new();
+        self.path.hash(&mut hash);
+        hash.finish() as usize
     }
 
     pub fn make_new(&self, path: Vec<usize>) -> Tour {
@@ -167,8 +178,8 @@ impl Tour {
             }
             let current_len = dist(self.nodes[cur], self.nodes[prev]);
             total_len += current_len;
-            if (steps + 1) % 10 == 0 && !self.primes[prev] {
-                total_len += 0.1*current_len;
+            if (steps + 1) % 10 == 0 && !self.primes[prev] && current_len >= MIN_DIST_PENALTY {
+                total_len += (PENALTY - 1.0)*current_len;
             }
             steps += 1;
             path.push(cur);
@@ -292,8 +303,8 @@ impl Tour {
                 };
 
                 let mut current_len = dist(self.nodes[added[added_pos].0], self.nodes[added[added_pos].1]);
-                if (cur_offset + 1) % 10 == 0 && !self.primes[self.path[current]] {
-                    current_len *= 1.1;
+                if (cur_offset + 1) % 10 == 0 && !self.primes[self.path[current]] && current_len >= MIN_DIST_PENALTY {
+                    current_len *= PENALTY;
                 }
                 total_len += current_len;
                 cur_offset += 1;
