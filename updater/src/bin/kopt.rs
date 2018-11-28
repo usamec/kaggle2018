@@ -115,10 +115,10 @@ fn local_update<F>(size: usize, start: usize, temp: f64, nodes: &[(f64, f64)], c
 }
 
 fn main() {
-    let n_threads = 2;
+    let n_threads = 13;
     let nodes = Arc::new(load_poses());
     let primes = Arc::new(get_primes(nodes.len()));
-    let tour = Arc::new(Mutex::new(Tour::new(load_tour("../outputs/koptx-0.csv"), nodes.clone(), primes.clone())));
+    let tour = Arc::new(Mutex::new(Tour::new(load_tour("../outputs/kopt9-0.csv"), nodes.clone(), primes.clone())));
     let candidates = load_candidates();
     let candidates_w = candidates.iter().enumerate().map(|(i, cc)| {
         cc.iter().map(|&c| (c, 1.0 / dist(nodes[i], nodes[c]).sqrt())).collect::<Vec<_>>()
@@ -141,14 +141,14 @@ fn main() {
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour) = do_opt(&mut our_tour, &our_candidates,0.01) {
+                if let Some(new_tour) = do_opt(&mut our_tour, &our_candidates,0.003) {
                     //println!("new len {}", new_tour.get_len());
                     our_tour = new_tour;
                     our_tour_hash = our_tour.hash();
                     let mut main_tour = main_tour_mutex.lock().unwrap();
                     *main_tour = our_tour.clone();
                     main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
-                    our_tour.save(&format!("../outputs/koptx-{}.csv", thread_id));
+                    our_tour.save(&format!("../outputs/kopt9-fin-{}.csv", thread_id));
                 }
                 cc += 1;
                 if cc % 1000000 == 0 {

@@ -2,6 +2,7 @@ extern crate updater;
 
 use updater::*;
 use std::fs::File;
+use std::io::BufWriter;
 use std::io::prelude::*;
 
 fn main() {
@@ -19,10 +20,10 @@ fn main() {
     let mut primes_at_10th = 0;
     let mut nonprimes_at_10th = 0;
 
-    let mut output = File::create("lens.txt").unwrap();
-    let mut path_output = File::create("path.txt").unwrap();
-    let mut primes_output = File::create("primes.txt").unwrap();
-    let mut tenth_output = File::create("10th.txt").unwrap();
+    let mut lens_output = BufWriter::new(File::create("lens.txt").unwrap());
+    let mut path_output = BufWriter::new(File::create("path.txt").unwrap());
+    let mut primes_output = BufWriter::new(File::create("primes.txt").unwrap());
+    let mut tenth_output = BufWriter::new(File::create("10th.txt").unwrap());
 
     for i in 0..nodes.len() {
         if primes[i] {
@@ -38,14 +39,14 @@ fn main() {
             writeln!(tenth_output, "{} {}", nodes[tour[i]].0, nodes[tour[i]].1);
             if !primes[tour[i]] {
                 penalty_len += current_len * (PENALTY - 1.0);
-                writeln!(output, "{} {}", current_len, current_len * (PENALTY - 1.0));
+                writeln!(lens_output, "{} {}", current_len, current_len * (PENALTY - 1.0));
                 nonprimes_at_10th += 1;
             } else {
-                writeln!(output, "{} {}", current_len, 0);
+                writeln!(lens_output, "{} {}", current_len, 0);
                 primes_at_10th += 1;
             }
         } else {
-            writeln!(output, "{} {}", current_len, 0);
+            writeln!(lens_output, "{} {}", current_len, 0);
         }
     }
     writeln!(path_output, "{} {}", nodes[0].0, nodes[0].1);
