@@ -61,7 +61,7 @@ fn main() {
     let mut current_tour = tour.clone();
     let mut rng = rand::thread_rng();
     let mut cur_len = verify_and_calculate_len(&nodes, &current_tour, &primes);
-    let candidates = load_candidates();
+    let candidates = load_candidates(50);
 
     for _outer_iter in 0..1000000000000usize {
         let mut inv = vec![0; nodes.len()];
@@ -80,7 +80,7 @@ fn main() {
 
         let cur_dist = dist(nodes[tour[main_start]], nodes[tour[main_start+1]]);
         let new_dist = dist(nodes[tour[main_start]], nodes[cand]) + dist(nodes[cand], nodes[tour[main_start+1]]);
-        if (new_dist > cur_dist * 1.5) {
+        if new_dist > cur_dist * 1.5 {
             continue
         }
 

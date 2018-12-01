@@ -7,7 +7,7 @@ use verify_and_calculate_len;
 use std::fs::File;
 use std::io::prelude::*;
 use std::iter;
-use super::{PENALTY, MIN_DIST_PENALTY};
+use super::*;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -88,6 +88,16 @@ fn path_to_edges(path: &[usize]) -> Vec<TwoEdges> {
 
 impl Tour {
     pub fn new(path: Vec<usize>, nodes: Arc<Vec<(f64, f64)>>, primes: Arc<Vec<bool>>) -> Tour {
+        let min_dist_penalty = unsafe {
+            MIN_DIST_PENALTY
+        };
+        let penalty = unsafe {
+            PENALTY
+        };
+
+        let penalty_threshold = unsafe {
+            PENALTY_THRESHOLD
+        };
         let per_nodes_edges = path_to_edges(&path);
         let cur_len = verify_and_calculate_len(&nodes, &path, &primes);
         let mut inv = vec![0; nodes.len()];
@@ -106,18 +116,10 @@ impl Tour {
         for i in 0..path.len()-1 {
             let current_len = dist(nodes[path[i]], nodes[path[i+1]]);
             for j in 0..10 {
-                let ll = prefix_lens_offset[j].last().unwrap() + if (i + 1 + j) % 10 == 0 && !primes[path[i]] && current_len >= MIN_DIST_PENALTY  {
-                    current_len * (PENALTY - 1.0)
-                } else {
-                    0.0
-                };
+                let ll = prefix_lens_offset[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i], &primes, min_dist_penalty, penalty_threshold, penalty);
                 prefix_lens_offset[j].push(ll);
 
-                let ll = prefix_lens_offset_rev[j].last().unwrap() + if (i + 1 + j) % 10 == 0 && !primes[path[i+1]] && current_len >= MIN_DIST_PENALTY {
-                    current_len * (PENALTY - 1.0)
-                } else {
-                    0.0
-                };
+                let ll = prefix_lens_offset_rev[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i+1], &primes, min_dist_penalty, penalty_threshold, penalty);
                 prefix_lens_offset_rev[j].push(ll);
             }
         }
@@ -138,6 +140,8 @@ impl Tour {
     pub fn get_path(&self) -> &[usize] {
         &self.path
     }
+
+    pub fn get_inv(&self) -> &[usize] { &self.inv }
 
     pub fn get_len(&self) -> f64 {
         self.cur_len
@@ -160,6 +164,17 @@ impl Tour {
     }
 
     pub fn check_nodes_edges(&self) -> Option<(f64, Vec<usize>)> {
+        let min_dist_penalty = unsafe {
+            MIN_DIST_PENALTY
+        };
+        let penalty = unsafe {
+            PENALTY
+        };
+
+        let penalty_threshold = unsafe {
+            PENALTY_THRESHOLD
+        };
+
         let mut cur = self.per_nodes_edges[0].get(0).unwrap();
         let mut prev = 0;
         let mut steps = 1;
@@ -178,9 +193,7 @@ impl Tour {
             }
             let current_len = dist(self.nodes[cur], self.nodes[prev]);
             total_len += current_len;
-            if (steps + 1) % 10 == 0 && !self.primes[prev] && current_len >= MIN_DIST_PENALTY {
-                total_len += (PENALTY - 1.0)*current_len;
-            }
+            total_len += get_penalty(current_len, 1 + steps, prev, &self.primes, min_dist_penalty, penalty_threshold, penalty);
             steps += 1;
             path.push(cur);
         }
@@ -253,6 +266,17 @@ impl Tour {
     }
 
     pub fn test_changes_fast(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> Option<f64> {
+        let min_dist_penalty = unsafe {
+            MIN_DIST_PENALTY
+        };
+        let penalty = unsafe {
+            PENALTY
+        };
+
+        let penalty_threshold = unsafe {
+            PENALTY_THRESHOLD
+        };
+
         let mut duplicate = false;
         for i in 0..removed.len() {
             for j in 0..i {
@@ -278,12 +302,13 @@ impl Tour {
 
         if !duplicate {
             let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
-            let mut added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
-            /*println!("rem {:?}", removed);
-            println!("add {:?}", added);
-            println!("rid {:?}", removed_inds);
-            println!("aid {:?}", added_inds);*/
+            let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
             removed_inds.sort();
+            /*println!("rem {:?}", removed);
+            println!("add {:?}", added);*/
+            /*println!("rid {:?}", removed_inds);
+            println!("aid {:?}", added_inds);*/
+
 
             let mut used_added = added_inds.iter().map(|_| false).collect::<Vec<_>>();
 
@@ -303,9 +328,7 @@ impl Tour {
                 };
 
                 let mut current_len = dist(self.nodes[added[added_pos].0], self.nodes[added[added_pos].1]);
-                if (cur_offset + 1) % 10 == 0 && !self.primes[self.path[current]] && current_len >= MIN_DIST_PENALTY {
-                    current_len *= PENALTY;
-                }
+                current_len += get_penalty(current_len, 1 + cur_offset, self.path[current], &self.primes, min_dist_penalty, penalty_threshold, penalty);
                 total_len += current_len;
                 cur_offset += 1;
                 cur_offset %= 10;
@@ -364,7 +387,7 @@ mod tests {
     #[test]
     fn test_tour_check() {
         let mut rng = rand::thread_rng();
-        let nodes = (0..100).map(|x| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>();
+        let nodes = (0..100).map(|_| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>();
 
         let mut tour_path = Vec::from_iter(0..100);
         tour_path[1..].shuffle(&mut rng);
@@ -411,7 +434,7 @@ mod tests {
             let slow = tour.test_changes(&added, &removed);
             let fast = tour.test_changes_fast(&added, &removed);
             assert_eq!(slow.is_none(), fast.is_none());
-            if let Some((slow_len, p)) = slow {
+            if let Some((slow_len, _p)) = slow {
                 if let Some(fast_len) = fast {
 
                     //println!("s {} f {}", slow_len, fast_len);
@@ -425,7 +448,7 @@ mod tests {
     #[test]
     fn test_dist() {
         let mut rng = rand::thread_rng();
-        let nodes = Arc::new((0..100).map(|x| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>());
+        let nodes = Arc::new((0..100).map(|_| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>());
 
         let mut tour_path = Vec::from_iter(0..100);
         tour_path[1..].shuffle(&mut rng);
@@ -433,7 +456,7 @@ mod tests {
 
         let primes = Arc::new(get_primes(100));
 
-        let mut tour = Tour::new(tour_path, nodes.clone(), primes.clone());
+        let tour = Tour::new(tour_path, nodes.clone(), primes.clone());
 
         for end in 0..100 {
             for start in 0..end {
@@ -449,7 +472,7 @@ mod tests {
     #[test]
     fn test_dist_rev() {
         let mut rng = rand::thread_rng();
-        let nodes = Arc::new((0..100).map(|x| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>());
+        let nodes = Arc::new((0..100).map(|_| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>());
 
         let mut tour_path = Vec::from_iter(0..100);
         tour_path[1..].shuffle(&mut rng);
@@ -458,7 +481,7 @@ mod tests {
 
         let primes = Arc::new(get_primes(100));
 
-        let mut tour = Tour::new(tour_path, nodes.clone(), primes.clone());
+        let tour = Tour::new(tour_path, nodes.clone(), primes.clone());
 
         for end in 0..100 {
             for start in 0..end {

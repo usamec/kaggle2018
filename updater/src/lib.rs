@@ -17,8 +17,14 @@ pub use union_find::UnionFind;
 
 pub use tour::Tour;
 
-pub const PENALTY: f64 = 1.1;
+/*pub const PENALTY: f64 = 1.1;
 pub const MIN_DIST_PENALTY: f64 = 0.0;
+pub const TEMP: f64 = 0.03;*/
+
+pub static mut PENALTY: f64 = 0.1;
+pub static mut MIN_DIST_PENALTY: f64 = 0.0;
+pub static mut TEMP: f64 = 0.03;
+pub static mut PENALTY_THRESHOLD: usize = 2_000_000;
 
 pub fn load_poses() -> Vec<(f64,f64)> {
     let f = File::open("../inputs/cities.csv").expect("file not found");
@@ -32,15 +38,25 @@ pub fn load_poses() -> Vec<(f64,f64)> {
     out
 }
 
-pub fn load_candidates() -> Vec<Vec<usize>> {
+pub fn load_candidates(cand_limit: usize) -> Vec<Vec<usize>> {
     let f = File::open("../inputs/pi-nearest.txt").expect("file not found");
     let file = BufReader::new(&f);
-    let mut out = Vec::new();
+    let mut out: Vec<Vec<usize>> = Vec::new();
     for line in file.lines() {
         let cur_line = line.unwrap();
         let part2 = cur_line.split(": ").skip(1).next().unwrap();
-        out.push(part2.split(" ").map(|x| x.parse().unwrap()).collect());
+        out.push(part2.split(" ").map(|x| x.parse().unwrap()).take(cand_limit).collect());
     }
+
+    /*let c2 = out.clone();
+    for (i, l) in c2.iter().enumerate() {
+        for &j in l {
+            if !out[j].contains(&i) {
+                out[j].push(i);
+            }
+        }
+    }*/
+
     out
 }
 
@@ -69,6 +85,14 @@ pub fn get_primes(limit: usize) -> Vec<bool> {
     res
 }
 
+pub fn get_penalty(current_len: f64, cur_pos: usize, cur_node: usize, primes: &[bool], min_dist_penalty: f64, penalty_threshold: usize, penalty: f64) -> f64 {
+    if cur_pos % 10 == 0 && !primes[cur_node] && current_len >= min_dist_penalty && cur_pos < penalty_threshold {
+        penalty * current_len
+    } else {
+        0.0
+    }
+}
+
 pub fn verify_and_calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[bool]) -> f64 {
     assert!(tour.len() == nodes.len() + 1);
     assert!(tour[0] == 0);
@@ -80,11 +104,20 @@ pub fn verify_and_calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[
 
     let mut total_len = 0f64;
 
+    let min_dist_penalty = unsafe {
+        MIN_DIST_PENALTY
+    };
+    let penalty = unsafe {
+        PENALTY
+    };
+
+    let penalty_threshold = unsafe {
+        PENALTY_THRESHOLD
+    };
+
     for i in 0..tour.len()-1 {
         let mut current_len = dist(nodes[tour[i]], nodes[tour[i+1]]);
-        if (i + 1) % 10 == 0 && !primes[tour[i]] && current_len >= MIN_DIST_PENALTY {
-            current_len *= PENALTY;
-        }
+        current_len += get_penalty(current_len, i + 1, tour[i], primes, min_dist_penalty, penalty_threshold, penalty);
         total_len += current_len;
     }
     total_len
@@ -93,11 +126,20 @@ pub fn verify_and_calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[
 pub fn calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[bool], offset: usize) -> f64 {
     let mut total_len = 0f64;
 
+    let min_dist_penalty = unsafe {
+        MIN_DIST_PENALTY
+    };
+    let penalty = unsafe {
+        PENALTY
+    };
+
+    let penalty_threshold = unsafe {
+        PENALTY_THRESHOLD
+    };
+
     for i in 0..tour.len()-1 {
         let mut current_len = dist(nodes[tour[i]], nodes[tour[i+1]]);
-        if (i + 1 + offset) % 10 == 0 && !primes[tour[i]]  && current_len >= MIN_DIST_PENALTY {
-            current_len *= PENALTY;
-        }
+        current_len += get_penalty(current_len, i + 1 + offset, tour[i], primes, min_dist_penalty, penalty_threshold, penalty);
         total_len += current_len;
     }
     total_len

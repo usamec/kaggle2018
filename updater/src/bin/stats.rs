@@ -6,6 +6,22 @@ use std::io::BufWriter;
 use std::io::prelude::*;
 
 fn main() {
+    unsafe {
+        PENALTY = 0.1;
+        PENALTY_THRESHOLD = 200000;
+    }
+
+    let min_dist_penalty = unsafe {
+        MIN_DIST_PENALTY
+    };
+    let penalty = unsafe {
+        PENALTY
+    };
+
+    let penalty_threshold = unsafe {
+        PENALTY_THRESHOLD
+    };
+
     let nodes = load_poses();
     let tour = load_tour("../outputs/workingx.csv");
     let primes = get_primes(nodes.len());
@@ -38,8 +54,8 @@ fn main() {
         if (i + 1) % 10 == 0 {
             writeln!(tenth_output, "{} {}", nodes[tour[i]].0, nodes[tour[i]].1);
             if !primes[tour[i]] {
-                penalty_len += current_len * (PENALTY - 1.0);
-                writeln!(lens_output, "{} {}", current_len, current_len * (PENALTY - 1.0));
+                penalty_len += get_penalty(current_len, i+1, tour[i], &primes, min_dist_penalty, penalty_threshold, penalty);
+                writeln!(lens_output, "{} {}", current_len, current_len * (penalty));
                 nonprimes_at_10th += 1;
             } else {
                 writeln!(lens_output, "{} {}", current_len, 0);

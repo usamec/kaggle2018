@@ -1,8 +1,8 @@
 use dist;
 use UnionFind;
-use super::PENALTY;
 use calculate_len;
 use rand::prelude::*;
+use super::*;
 
 fn get_lower_bound(cur: usize, left: &[usize], target: usize, nodes: &[(f64,f64)]) -> f64 {
     let mut all_nodes = Vec::new();
@@ -37,11 +37,22 @@ fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usi
     if upper_bound < get_lower_bound(cur, &left, target, nodes) {
         (None, 1)
     } else {
+        let penalty = unsafe {
+            PENALTY
+        };
+        let min_dist_penalty = unsafe {
+            MIN_DIST_PENALTY
+        };
+        let penalty = unsafe {
+            PENALTY
+        };
+
+        let penalty_threshold = unsafe {
+            PENALTY_THRESHOLD
+        };
         if left.is_empty() {
             let mut current_len = dist(nodes[cur], nodes[target]);
-            if (offset + 1) % 10 == 0 && !primes[cur] {
-                current_len *= PENALTY;
-            }
+            current_len += get_penalty(current_len, 1 + offset, cur, primes, min_dist_penalty, penalty_threshold, penalty);
             (Some((vec!(cur, target), current_len)), 1)
         } else {
             let mut best_len = -1f64;
@@ -51,9 +62,7 @@ fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usi
             left.shuffle(&mut rng);
             for &next in left.iter() {
                 let mut current_len = dist(nodes[cur], nodes[next]);
-                if (offset + 1) % 10 == 0 && !primes[cur] {
-                    current_len *= PENALTY;
-                }
+                current_len += get_penalty(current_len, offset + 1, cur, primes, min_dist_penalty, penalty_threshold, penalty);
                 let mut left2 = left.iter().filter(|&&x| x != next).map(|x| *x).collect::<Vec<_>>();
                 let (maybe_res, steps) = full_optim_inner(next, left2, target, offset + 1, nodes, primes, upper_bound - current_len);
                 total_steps += steps;

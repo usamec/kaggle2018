@@ -7,3 +7,4 @@ authors = ["Vlado Boza <vlado.boza@ceai.io>"]
 csv = "1"
 rand = "0.6"
 assert_approx_eq = "1.0.0"
+structopt = "0.2"
