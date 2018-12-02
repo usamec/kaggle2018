@@ -522,6 +522,7 @@ fn main() {
         let handle = thread::spawn(move || {
             let mut our_tour_hash = main_tour_hash.load(Ordering::Relaxed);
             let mut best_len = main_tour_mutex.lock().unwrap().get_len();
+            let mut best_real_len = main_tour_mutex.lock().unwrap().get_real_len();
 
             loop {
                 let cur_hash = main_tour_hash.load(Ordering::Relaxed);
@@ -533,6 +534,11 @@ fn main() {
                     if main_tour.get_len() < best_len {
                         fs::copy(&format!("{}-latest.csv", prefix), &format!("{}-best.csv", prefix));
                         best_len = main_tour.get_len();
+                    }
+
+                    if main_tour.get_real_len() < best_real_len {
+                        fs::copy(&format!("{}-latest.csv", prefix), &format!("{}-real-best.csv", prefix));
+                        best_real_len = main_tour.get_real_len();
                     }
 
                     our_tour_hash = cur_hash;
