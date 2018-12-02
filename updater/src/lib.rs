@@ -18,16 +18,13 @@ pub use union_find::UnionFind;
 pub use tour::Tour;
 
 pub struct PenaltyConfig {
-    pub penalty: f64,
-    pub min_dist_penalty: f64,
-    pub penalty_threshold: usize
+    pub base_penalty: f64,
+    // (edge_length, edge_id) -> (0.0,1.0)
+    // if not defined assumes |_,_| 1.0
+    pub penalty_lambda: Option<Box<Fn(f64, usize) -> f64>>
 }
 
-pub static mut penalty_config: PenaltyConfig = PenaltyConfig { penalty: 0.1, min_dist_penalty: 0.0, penalty_threshold: 2_000_000 };
-
-/*pub static mut PENALTY: f64 = 0.1;
-pub static mut MIN_DIST_PENALTY: f64 = 0.0;
-pub static mut PENALTY_THRESHOLD: usize = 2_000_000;*/
+pub static mut penalty_config: PenaltyConfig = PenaltyConfig { base_penalty: 0.1, penalty_lambda: None };
 
 pub fn load_poses() -> Vec<(f64,f64)> {
     let f = File::open("../inputs/cities.csv").expect("file not found");
@@ -89,17 +86,8 @@ pub fn get_primes(limit: usize) -> Vec<bool> {
 }
 
 pub fn get_penalty(current_len: f64, cur_pos: usize, cur_node: usize, primes: &[bool]) -> f64 {
-    let min_dist_penalty = unsafe {
-        penalty_config.min_dist_penalty
-    };
-    let penalty = unsafe {
-        penalty_config.penalty
-    };
-    let penalty_threshold = unsafe {
-        penalty_config.penalty_threshold
-    };
-    if cur_pos % 10 == 0 && !primes[cur_node] && current_len >= min_dist_penalty && cur_pos < penalty_threshold {
-        penalty * current_len
+    if cur_pos % 10 == 0 && !primes[cur_node] {
+        current_len * unsafe { penalty_config.base_penalty } * unsafe { penalty_config.penalty_lambda.as_ref().map(|x| x(current_len, cur_pos)).unwrap_or(1.0)}
     } else {
         0.0
     }

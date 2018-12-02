@@ -7,7 +7,7 @@ use std::io::prelude::*;
 
 fn main() {
     unsafe {
-        penalty_config.penalty = 0.1;
+        penalty_config.base_penalty = 0.1;
     }
 
     let nodes = load_poses();

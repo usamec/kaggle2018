@@ -347,14 +347,27 @@ struct Config {
 fn main() {
     let opt = Config::from_args();
 
+    let nodes = Arc::new(load_poses());
+
     unsafe {
-        penalty_config.penalty = opt.penalty;
-        penalty_config.min_dist_penalty = opt.min_dist_penalty;
-        penalty_config.penalty_threshold = opt.penalty_threshold;
+        penalty_config.base_penalty = opt.penalty;
+
+        if opt.penalty_threshold < nodes.len() || opt.min_dist_penalty > 0.0 {
+            let min_dist_penalty = opt.min_dist_penalty;
+            let penalty_threshold = opt.penalty_threshold;
+            penalty_config.penalty_lambda = Some(
+                Box::new(move |len, pos| {
+                   if (len > min_dist_penalty && pos < penalty_threshold) {
+                       1.0
+                   } else {
+                       0.0
+                   }
+                })
+            );
+        }
     }
 
 
-    let nodes = Arc::new(load_poses());
     let primes = Arc::new(get_primes(nodes.len()));
     let tour = Arc::new(Mutex::new(Tour::new(load_tour(&opt.load_from), nodes.clone(), primes.clone())));
     let candidates = load_candidates(opt.cand_limit);

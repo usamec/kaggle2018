@@ -129,9 +129,6 @@ struct Config {
     #[structopt(short = "p", long = "penalty", default_value = "1.1")]
     penalty: f64,
 
-    #[structopt(short = "m", long = "min-dist-penalty", default_value = "0.0")]
-    min_dist_penalty: f64,
-
     #[structopt(short = "n", long = "n-threads", default_value = "2")]
     n_threads: usize,
 
@@ -149,8 +146,7 @@ fn main() {
     let opt = Config::from_args();
 
     unsafe {
-        penalty_config.penalty = opt.penalty;
-        penalty_config.min_dist_penalty = opt.min_dist_penalty;
+        penalty_config.base_penalty = opt.penalty;
     }
 
 
