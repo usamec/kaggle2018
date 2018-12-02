@@ -348,9 +348,9 @@ fn main() {
     let opt = Config::from_args();
 
     unsafe {
-        PENALTY = opt.penalty;
-        MIN_DIST_PENALTY = opt.min_dist_penalty;
-        PENALTY_THRESHOLD = opt.penalty_threshold;
+        penalty_config.penalty = opt.penalty;
+        penalty_config.min_dist_penalty = opt.min_dist_penalty;
+        penalty_config.penalty_threshold = opt.penalty_threshold;
     }
 
 

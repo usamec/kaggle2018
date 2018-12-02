@@ -88,16 +88,6 @@ fn path_to_edges(path: &[usize]) -> Vec<TwoEdges> {
 
 impl Tour {
     pub fn new(path: Vec<usize>, nodes: Arc<Vec<(f64, f64)>>, primes: Arc<Vec<bool>>) -> Tour {
-        let min_dist_penalty = unsafe {
-            MIN_DIST_PENALTY
-        };
-        let penalty = unsafe {
-            PENALTY
-        };
-
-        let penalty_threshold = unsafe {
-            PENALTY_THRESHOLD
-        };
         let per_nodes_edges = path_to_edges(&path);
         let cur_len = verify_and_calculate_len(&nodes, &path, &primes);
         let mut inv = vec![0; nodes.len()];
@@ -116,10 +106,10 @@ impl Tour {
         for i in 0..path.len()-1 {
             let current_len = dist(nodes[path[i]], nodes[path[i+1]]);
             for j in 0..10 {
-                let ll = prefix_lens_offset[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i], &primes, min_dist_penalty, penalty_threshold, penalty);
+                let ll = prefix_lens_offset[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i], &primes);
                 prefix_lens_offset[j].push(ll);
 
-                let ll = prefix_lens_offset_rev[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i+1], &primes, min_dist_penalty, penalty_threshold, penalty);
+                let ll = prefix_lens_offset_rev[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i+1], &primes);
                 prefix_lens_offset_rev[j].push(ll);
             }
         }
@@ -164,17 +154,6 @@ impl Tour {
     }
 
     pub fn check_nodes_edges(&self) -> Option<(f64, Vec<usize>)> {
-        let min_dist_penalty = unsafe {
-            MIN_DIST_PENALTY
-        };
-        let penalty = unsafe {
-            PENALTY
-        };
-
-        let penalty_threshold = unsafe {
-            PENALTY_THRESHOLD
-        };
-
         let mut cur = self.per_nodes_edges[0].get(0).unwrap();
         let mut prev = 0;
         let mut steps = 1;
@@ -193,7 +172,7 @@ impl Tour {
             }
             let current_len = dist(self.nodes[cur], self.nodes[prev]);
             total_len += current_len;
-            total_len += get_penalty(current_len, 1 + steps, prev, &self.primes, min_dist_penalty, penalty_threshold, penalty);
+            total_len += get_penalty(current_len, 1 + steps, prev, &self.primes);
             steps += 1;
             path.push(cur);
         }
@@ -266,17 +245,6 @@ impl Tour {
     }
 
     pub fn test_changes_fast(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> Option<f64> {
-        let min_dist_penalty = unsafe {
-            MIN_DIST_PENALTY
-        };
-        let penalty = unsafe {
-            PENALTY
-        };
-
-        let penalty_threshold = unsafe {
-            PENALTY_THRESHOLD
-        };
-
         let mut duplicate = false;
         for i in 0..removed.len() {
             for j in 0..i {
@@ -328,7 +296,7 @@ impl Tour {
                 };
 
                 let mut current_len = dist(self.nodes[added[added_pos].0], self.nodes[added[added_pos].1]);
-                current_len += get_penalty(current_len, 1 + cur_offset, self.path[current], &self.primes, min_dist_penalty, penalty_threshold, penalty);
+                current_len += get_penalty(current_len, 1 + cur_offset, self.path[current], &self.primes);
                 total_len += current_len;
                 cur_offset += 1;
                 cur_offset %= 10;

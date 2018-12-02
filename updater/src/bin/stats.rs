@@ -7,20 +7,8 @@ use std::io::prelude::*;
 
 fn main() {
     unsafe {
-        PENALTY = 0.1;
-        PENALTY_THRESHOLD = 200000;
+        penalty_config.penalty = 0.1;
     }
-
-    let min_dist_penalty = unsafe {
-        MIN_DIST_PENALTY
-    };
-    let penalty = unsafe {
-        PENALTY
-    };
-
-    let penalty_threshold = unsafe {
-        PENALTY_THRESHOLD
-    };
 
     let nodes = load_poses();
     let tour = load_tour("../outputs/workingx.csv");
@@ -54,8 +42,9 @@ fn main() {
         if (i + 1) % 10 == 0 {
             writeln!(tenth_output, "{} {}", nodes[tour[i]].0, nodes[tour[i]].1);
             if !primes[tour[i]] {
-                penalty_len += get_penalty(current_len, i+1, tour[i], &primes, min_dist_penalty, penalty_threshold, penalty);
-                writeln!(lens_output, "{} {}", current_len, current_len * (penalty));
+                let cur_penalty = get_penalty(current_len, i+1, tour[i], &primes);
+                penalty_len += cur_penalty;
+                writeln!(lens_output, "{} {}", current_len, cur_penalty);
                 nonprimes_at_10th += 1;
             } else {
                 writeln!(lens_output, "{} {}", current_len, 0);

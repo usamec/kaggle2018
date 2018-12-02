@@ -149,8 +149,8 @@ fn main() {
     let opt = Config::from_args();
 
     unsafe {
-        PENALTY = opt.penalty;
-        MIN_DIST_PENALTY = opt.min_dist_penalty;
+        penalty_config.penalty = opt.penalty;
+        penalty_config.min_dist_penalty = opt.min_dist_penalty;
     }
 
 
@@ -246,18 +246,4 @@ fn main() {
     for handle in handles {
         handle.join().unwrap();
     }
-
-
-    /*let mut cc = 0;
-    loop {
-        if let Some(new_tour) = do_opt(&mut tour, &candidates_w,0.01) {
-            //println!("new len {}", new_tour.get_len());
-            tour = new_tour;
-            tour.save("../outputs/kopt6.csv");
-        }
-        cc += 1;
-        if cc % 1000000 == 0 {
-            println!("cc {}", cc);
-        }
-    }*/
 }
