@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import argparse
 
 
 def is_prime(x):
@@ -21,8 +22,12 @@ def read_cities(fname):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("out")
+    args = parser.parse_args()
+
     cities = read_cities("cities.tsv")
-    with open("cities.out", "w") as fout:
+    with open(args.out, "w") as fout:
         for i, (x, y) in enumerate(cities):
             if is_prime(i):
                 print(x, y, "0x3e8800", file=fout)
