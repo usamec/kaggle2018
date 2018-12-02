@@ -1,0 +1,4 @@
+outputs/*
+
+!outputs/best.csv
+!outputs/candidate.csv
