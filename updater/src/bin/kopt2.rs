@@ -20,6 +20,13 @@ use std::iter;
 use std::time;
 use std::fs;
 
+/// The logistic aka sigmoid function.
+#[inline]
+pub fn sigmoid(f: f64) -> f64 {
+    use std::f64::consts::E;
+    1.0 / (1.0 + E.powf(-f))
+}
+
 fn do_opt_inner(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], min_ind: usize, max_ind: usize) -> Option<Tour> {
     let mut rng = rand::thread_rng();
     let start_path_pos = rng.gen_range(min_ind+1, max_ind);
@@ -361,11 +368,7 @@ fn main() {
 
             penalty_config.penalty_lambda = Some(
                 Box::new(move |len, pos| {
-                    if len > threshold {
-                        1.0
-                    } else {
-                        len / threshold
-                    }
+                    sigmoid(len / (threshold + 1e-10))
                 })
             );
         }
