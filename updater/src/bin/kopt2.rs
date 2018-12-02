@@ -17,6 +17,8 @@ use structopt::StructOpt;
 use std::io::Write;
 use std::io::stdout;
 use std::iter;
+use std::time;
+use std::fs;
 
 fn do_opt_inner(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], min_ind: usize, max_ind: usize) -> Option<Tour> {
     let mut rng = rand::thread_rng();
@@ -342,9 +344,6 @@ struct Config {
 
     #[structopt(short = "pt", long = "penalty-threshold", default_value = "0.0")]
     penalty_threshold: f64,
-
-    #[structopt(short = "ps", long = "penalty-slope", default_value = "0.0")]
-    penalty_slope: f64
 }
 
 fn main() {
@@ -355,19 +354,21 @@ fn main() {
     unsafe {
         penalty_config.base_penalty = opt.penalty;
 
-        /*if opt.penalty_threshold < nodes.len() || opt.min_dist_penalty > 0.0 {
-            let min_dist_penalty = opt.min_dist_penalty;
+        if opt.penalty_threshold > 0.0 {
             let penalty_threshold = opt.penalty_threshold;
+
+            let threshold = penalty_threshold;
+
             penalty_config.penalty_lambda = Some(
                 Box::new(move |len, pos| {
-                   if (len > min_dist_penalty && pos < penalty_threshold) {
-                       1.0
-                   } else {
-                       0.0
-                   }
+                    if len > threshold {
+                        1.0
+                    } else {
+                        len / threshold
+                    }
                 })
             );
-        }*/
+        }
     }
 
 
@@ -414,7 +415,7 @@ fn main() {
                             main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
                         }
                     }
-                    our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
+                    //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
                 }
                 cc += 1;
                 if cc % 1000000 == 0 {
@@ -454,7 +455,7 @@ fn main() {
                             main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
                         }
                     }
-                    our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
+                    //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
                 }
                 cc += 1;
                 if cc % 1000000 == 0 {
@@ -508,6 +509,36 @@ fn main() {
                 cur_len = ccur_len;
                 cur_real_len = ccur_real_len;
                 println!("ccb {}", cc);
+            }
+        });
+        handles.push(handle);
+    }
+
+    // writer thread
+    {
+        let main_tour_mutex = Arc::clone(&tour);
+        let main_tour_hash = Arc::clone(&tour_hash);
+        let prefix = opt.save_to.clone();
+        let handle = thread::spawn(move || {
+            let mut our_tour_hash = main_tour_hash.load(Ordering::Relaxed);
+            let mut best_len = main_tour_mutex.lock().unwrap().get_len();
+
+            loop {
+                let cur_hash = main_tour_hash.load(Ordering::Relaxed);
+                if cur_hash != our_tour_hash {
+                    println!("saving");
+                    let main_tour = main_tour_mutex.lock().unwrap().clone();
+                    main_tour.save(&format!("{}-tmp.csv", prefix));
+                    fs::rename(&format!("{}-tmp.csv", prefix), &format!("{}-latest.csv", prefix));
+                    if main_tour.get_len() < best_len {
+                        fs::copy(&format!("{}-latest.csv", prefix), &format!("{}-best.csv", prefix));
+                        best_len = main_tour.get_len();
+                    }
+
+                    our_tour_hash = cur_hash;
+                    println!("done saving");
+                }
+                thread::sleep(time::Duration::from_millis(1000));
             }
         });
         handles.push(handle);
