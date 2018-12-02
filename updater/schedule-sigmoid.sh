@@ -8,7 +8,7 @@ do_iteration() {
   TIME=$1
   PENALTY="--penalty-threshold $2"
   echo "Current step: $1 $2" > ../outputs/step.txt
-  timeout $TIME target/release/kopt2 $IN $OUT $THREADS $PENALTY
+  timeout --foreground $TIME target/release/kopt2 $IN $OUT $THREADS $PENALTY
   mv ../outputs/pp-best.csv ../outputs/iter.csv
 }
 
