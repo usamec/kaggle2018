@@ -93,7 +93,8 @@ pub fn get_penalty(current_len: f64, cur_pos: usize, cur_node: usize, primes: &[
     }
 }
 
-pub fn verify_and_calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[bool]) -> f64 {
+// Return len with current settings, and len with competion settings
+pub fn verify_and_calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[bool]) -> (f64, f64) {
     assert!(tour.len() == nodes.len() + 1);
     assert!(tour[0] == 0);
     assert!(tour[tour.len() - 1] == 0);
@@ -103,13 +104,19 @@ pub fn verify_and_calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[
     assert!(tour_set.len() == nodes.len());
 
     let mut total_len = 0f64;
+    let mut total_real_len = 0f64;
 
     for i in 0..tour.len()-1 {
-        let mut current_len = dist(nodes[tour[i]], nodes[tour[i+1]]);
-        current_len += get_penalty(current_len, i + 1, tour[i], primes);
+        let current_len = dist(nodes[tour[i]], nodes[tour[i+1]]);
         total_len += current_len;
+        total_len += get_penalty(current_len, i + 1, tour[i], primes);
+
+        total_real_len += current_len;
+        if (i + 1) % 10 == 0 && !primes[tour[i]] {
+            total_real_len += 0.1 * current_len;
+        }
     }
-    total_len
+    (total_len, total_real_len)
 }
 
 pub fn calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[bool], offset: usize) -> f64 {

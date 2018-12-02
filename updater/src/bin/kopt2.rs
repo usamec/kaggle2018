@@ -164,6 +164,7 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>]) -> Option<Tour> {
 
     let (_, cur_tour_path) = tour.test_changes(&added, &removed).unwrap();
     let mut cur_tour = tour.make_new(cur_tour_path);
+    let mut actual_real_len = cur_tour.get_real_len();
 
     let removed_inds = removed.iter().map(|x| iter::once(tour.get_inv()[x.0]).chain(iter::once(tour.get_inv()[x.1]))).flatten().collect::<Vec<_>>();
 
@@ -180,6 +181,7 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>]) -> Option<Tour> {
             if new_tour.get_path() != tour.get_path() {
                 if new_tour.get_len() < actual_len {
                     actual_len = new_tour.get_len();
+                    actual_real_len = new_tour.get_real_len();
                     println!("bet {} {}", actual_len, start_len);
                     last = i;
                     cur_tour = new_tour;
@@ -197,7 +199,7 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>]) -> Option<Tour> {
         }
     }
     if actual_len < start_len {
-        println!("acceptx {} {}", actual_len, added_sum - removed_sum);
+        println!("acceptx {} real {} added - removed {}", actual_len, actual_real_len, added_sum - removed_sum);
         stdout().flush();
         Some(cur_tour)
     } else {
@@ -264,9 +266,10 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64) -> Optio
         let pr = rng.gen::<f64>();
         if len < tour.get_len() || (temp > 0.0 && ((tour.get_len() - len) / temp).exp() > pr) {
             let (res, p) = tour.test_changes(&added, &removed).unwrap();
-            println!("accept {} {} {}", res, added.len(), added_sum - removed_sum);
+            let new_tour = tour.make_new(p, );
+            println!("accept {} real {}, added len {} added - removed {}", new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum);
             stdout().flush();
-            Some((tour.make_new(p, ), pr))
+            Some((new_tour, pr))
         } else {
             None
         }
@@ -294,8 +297,8 @@ fn local_update<F>(size: usize, start: usize, temp: f64, nodes: &[(f64, f64)], c
                     slice[i] = slice_and_padding[i];
                 }
             }
-            let new_len = verify_and_calculate_len(&nodes, &new_tour, &primes);
-            println!("new_len {}", new_len);
+            let (new_len, new_real_len) = verify_and_calculate_len(&nodes, &new_tour, &primes);
+            println!("new_len {} real {}", new_len, new_real_len);
             stdout().flush();
             if new_len < cur_len {
                 println!("better {:?}", new_len);
@@ -319,9 +322,6 @@ struct Config {
     #[structopt(short = "p", long = "penalty", default_value = "0.1")]
     penalty: f64,
 
-    #[structopt(short = "m", long = "min-dist-penalty", default_value = "0.0")]
-    min_dist_penalty: f64,
-
     #[structopt(short = "n", long = "n-threads", default_value = "2")]
     n_threads: usize,
 
@@ -340,8 +340,11 @@ struct Config {
     #[structopt(short = "c", long = "cand-limit", default_value = "10")]
     cand_limit: usize,
 
-    #[structopt(short = "pt", long = "penalty-threshold", default_value = "2000000")]
-    penalty_threshold: usize
+    #[structopt(short = "pt", long = "penalty-threshold", default_value = "0.0")]
+    penalty_threshold: f64,
+
+    #[structopt(short = "ps", long = "penalty-slope", default_value = "0.0")]
+    penalty_slope: f64
 }
 
 fn main() {
@@ -352,7 +355,7 @@ fn main() {
     unsafe {
         penalty_config.base_penalty = opt.penalty;
 
-        if opt.penalty_threshold < nodes.len() || opt.min_dist_penalty > 0.0 {
+        /*if opt.penalty_threshold < nodes.len() || opt.min_dist_penalty > 0.0 {
             let min_dist_penalty = opt.min_dist_penalty;
             let penalty_threshold = opt.penalty_threshold;
             penalty_config.penalty_lambda = Some(
@@ -364,7 +367,7 @@ fn main() {
                    }
                 })
             );
-        }
+        }*/
     }
 
 
@@ -479,7 +482,7 @@ fn main() {
         let handle = thread::spawn(move || {
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().get_path().to_vec();
-            let mut cur_len = verify_and_calculate_len(&our_nodes, &our_tour, &our_primes);
+            let (mut cur_len, mut cur_real_len) = verify_and_calculate_len(&our_nodes, &our_tour, &our_primes);
             let mut rng = rand::thread_rng();
             loop {
                 let size = rng.gen_range(20, 41);
@@ -501,7 +504,9 @@ fn main() {
                 cc += 1;
                 let main_tour = main_tour_mutex.lock().unwrap();
                 our_tour = main_tour.get_path().to_vec();
-                cur_len = verify_and_calculate_len(&our_nodes, &our_tour, &our_primes);
+                let (ccur_len, ccur_real_len) = verify_and_calculate_len(&our_nodes, &our_tour, &our_primes);
+                cur_len = ccur_len;
+                cur_real_len = ccur_real_len;
                 println!("ccb {}", cc);
             }
         });

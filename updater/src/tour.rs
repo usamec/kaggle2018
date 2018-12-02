@@ -1,5 +1,4 @@
-
-
+use std::io::BufWriter;
 use std::sync::Arc;
 use rand::prelude::*;
 use dist;
@@ -70,6 +69,7 @@ pub struct Tour {
     inv: Vec<usize>,
     per_nodes_edges: Vec<TwoEdges>,
     cur_len: f64,
+    cur_real_len: f64,
     prefix_lens: Vec<f64>,
     prefix_lens_offset: [Vec<f64>; 10],
     prefix_lens_offset_rev: [Vec<f64>; 10]
@@ -89,7 +89,7 @@ fn path_to_edges(path: &[usize]) -> Vec<TwoEdges> {
 impl Tour {
     pub fn new(path: Vec<usize>, nodes: Arc<Vec<(f64, f64)>>, primes: Arc<Vec<bool>>) -> Tour {
         let per_nodes_edges = path_to_edges(&path);
-        let cur_len = verify_and_calculate_len(&nodes, &path, &primes);
+        let (cur_len, cur_real_len) = verify_and_calculate_len(&nodes, &path, &primes);
         let mut inv = vec![0; nodes.len()];
         for (i, &v) in path.iter().enumerate() {
             inv[v] = i;
@@ -114,7 +114,7 @@ impl Tour {
             }
         }
 
-        Tour { nodes, path, primes, inv, per_nodes_edges, cur_len, prefix_lens, prefix_lens_offset, prefix_lens_offset_rev }
+        Tour { nodes, path, primes, inv, per_nodes_edges, cur_len, prefix_lens, prefix_lens_offset, prefix_lens_offset_rev, cur_real_len }
     }
 
     pub fn hash(&self) -> usize {
@@ -135,6 +135,10 @@ impl Tour {
 
     pub fn get_len(&self) -> f64 {
         self.cur_len
+    }
+
+    pub fn get_real_len(&self) -> f64 {
+        self.cur_real_len
     }
 
     pub fn rand_neighbour(&self, node: usize) -> usize {
@@ -335,7 +339,7 @@ impl Tour {
     }
 
     pub fn save(&self, filename: &str) {
-        let mut output = File::create(filename).unwrap();
+        let mut output = BufWriter::new(File::create(filename).unwrap());
         writeln!(output, "Path");
         self.path.iter().for_each(|x| {
             writeln!(output, "{}", x);
