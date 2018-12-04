@@ -145,6 +145,14 @@ impl Tour {
         self.per_nodes_edges[node].rand()
     }
 
+    pub fn neighbours(&self, node: usize) -> [usize; 2] {
+        self.per_nodes_edges[node].edges
+    }
+
+    pub fn largest_dist_to_neigh(&self, node: usize) -> f64 {
+        self.per_nodes_edges[node].edges.iter().map(|&x| dist(self.nodes[node], self.nodes[x])).fold(0.0, f64::max)
+    }
+
     fn apply_changes(&mut self, added: &[(usize, usize)], removed: &[(usize, usize)]) {
         for &(a, b) in removed {
             self.per_nodes_edges[a].remove(b);
@@ -248,6 +256,127 @@ impl Tour {
         }
     }
 
+    pub fn count_cycles(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> usize {
+        let mut duplicate = false;
+        for i in 0..removed.len() {
+            for j in 0..i {
+                if removed[i] == removed[j] {
+                    duplicate = true;
+                }
+                if removed[i].0 == removed[j].1 && removed[i].1 == removed[j].0 {
+                    duplicate = true;
+                }
+            }
+        }
+
+        for i in 0..added.len() {
+            for j in 0..removed.len() {
+                if added[i] == removed[j] {
+                    duplicate = true;
+                }
+                if added[i].0 == removed[j].1 && added[i].1 == removed[j].0 {
+                    duplicate = true;
+                }
+            }
+        }
+
+        if !duplicate {
+            let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
+            let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
+            removed_inds.sort();
+
+            /*println!("rem {:?}", removed);
+            println!("add {:?}", added);
+            println!("rid {:?}", removed_inds);
+            println!("aid {:?}", added_inds);*/
+
+
+            let mut used_added = added_inds.iter().map(|_| false).collect::<Vec<_>>();
+
+            let mut current = removed_inds[0];
+            loop {
+                //println!("current {}", current);
+                let added_pos = added_inds.iter().enumerate().find_map(|(i, x)| if (x.0 == current || x.1 == current) && used_added[i] == false { Some(i) } else { None }).unwrap();
+                used_added[added_pos] = true;
+                let next = if added_inds[added_pos].0 == current {
+                    added_inds[added_pos].1
+                } else {
+                    added_inds[added_pos].0
+                };
+
+                let next_pos = removed_inds.iter().enumerate().find_map(|(i, &x)| if x == next { Some(i) } else { None }).unwrap();
+                if next_pos == removed_inds.len() - 1 {
+                    break;
+                }
+                if next_pos == 0 {
+                    println!("rem {:?}", removed);
+                    println!("add {:?}", added);
+                    println!("rid {:?}", removed_inds);
+                    println!("aid {:?}", added_inds);
+                }
+                assert!(next_pos != 0);
+
+                if next_pos % 2 == 1 {
+                    current = removed_inds[next_pos + 1];
+                } else {
+                    current = removed_inds[next_pos - 1];
+                }
+            }
+            let mut cycles = 1;
+            loop {
+                let maybe_cycle_start = used_added.iter().enumerate().find_map(|(i, x)| if !x { Some(i) } else { None });
+                match maybe_cycle_start {
+                    None => break,
+                    Some(cycle_start) => {
+                        let start = added_inds[cycle_start].0;
+                        //println!("start next cycle {}", start);
+                        let mut current = start;
+                        loop {
+                            //println!("current {}", current);
+                            let added_pos = added_inds.iter().enumerate().find_map(|(i, x)| if (x.0 == current || x.1 == current) && used_added[i] == false { Some(i) } else { None }).unwrap();
+                            used_added[added_pos] = true;
+                            let next = if added_inds[added_pos].0 == current {
+                                added_inds[added_pos].1
+                            } else {
+                                added_inds[added_pos].0
+                            };
+                            //println!("next {}", next);
+
+                            let next_pos = removed_inds.iter().enumerate().find_map(|(i, &x)| if x == next { Some(i) } else { None }).unwrap();
+
+                            if next_pos == 0 {
+                                println!("rem {:?}", removed);
+                                println!("add {:?}", added);
+                                println!("rid {:?}", removed_inds);
+                                println!("aid {:?}", added_inds);
+                            }
+                            assert!(next_pos != 0);
+
+                            if next_pos % 2 == 1 {
+                                current = removed_inds[next_pos + 1];
+                            } else {
+                                current = removed_inds[next_pos - 1];
+                            }
+
+                            if current == start {
+                                break;
+                            }
+                        }
+                        cycles += 1;
+                    }
+                }
+            }
+            cycles
+            /*if used_added.iter().all(|&x| x) {
+                1
+            } else {
+                47
+            }*/
+        } else {
+            1_000_000_000
+        }
+    }
+
     pub fn test_changes_fast(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> Option<f64> {
         let mut duplicate = false;
         for i in 0..removed.len() {
@@ -277,8 +406,8 @@ impl Tour {
             let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
             removed_inds.sort();
             /*println!("rem {:?}", removed);
-            println!("add {:?}", added);*/
-            /*println!("rid {:?}", removed_inds);
+            println!("add {:?}", added);
+            println!("rid {:?}", removed_inds);
             println!("aid {:?}", added_inds);*/
 
 
