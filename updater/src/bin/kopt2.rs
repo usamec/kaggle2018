@@ -605,7 +605,7 @@ fn main() {
 
             penalty_config.penalty_lambda = Some(
                 Box::new(move |len, pos| {
-                    sigmoid(len / (threshold + 1e-10))
+                    sigmoid(((len / (threshold + 1e-10)) - 1.0) * 5.0)
                 })
             );
         }
