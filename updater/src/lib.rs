@@ -38,6 +38,27 @@ pub fn load_poses() -> Vec<(f64,f64)> {
     out
 }
 
+pub fn load_candidates2(cand_limit: usize) -> Vec<Vec<usize>> {
+    let f = File::open("../inputs/cities.cand").expect("file not found");
+    let file = BufReader::new(&f);
+    let mut out: Vec<Vec<usize,>> = Vec::new();
+    for line in file.lines().skip(1) {
+        let cur_line = line.unwrap();
+        let parts = cur_line.trim().split(" ").skip(3).collect::<Vec<_>>();
+        out.push(parts.chunks(2).map(|x| {
+            //println!("{:?}", x);
+            x[0].parse::<usize>().unwrap() - 1
+        }).take(cand_limit).collect());
+
+        //println!("next");
+
+        /*let part2 = cur_line.skip(3).next().unwrap();
+        out.push(part2.split(" ").map(|x| x.parse().unwrap()).take(cand_limit).collect());*/
+    }
+
+    out
+}
+
 pub fn load_candidates(cand_limit: usize) -> Vec<Vec<usize>> {
     let f = File::open("../inputs/pi-nearest.txt").expect("file not found");
     let file = BufReader::new(&f);

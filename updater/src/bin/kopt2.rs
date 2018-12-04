@@ -209,8 +209,11 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>]) -> Option<Tour> {
 
     let mut last = 0;
     let mut fouls = 0;
+    let mut added_v = vec!();
+    let mut removed_v = vec!();
+    let mut cand_buf = vec!();
     for i in 0..1_000_000_000 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, 3.0, "heavy-") {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, 3.0, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf) {
             if new_tour.get_path() != tour.get_path() {
                 if new_tour.get_len() < actual_len {
                     actual_len = new_tour.get_len();
@@ -331,15 +334,18 @@ fn do_opt_old(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64) -> O
     }
 }
 
-fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limit: f64, log_prefix: &str) -> Option<(Tour, f64)> {
+fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>) -> Option<(Tour, f64)> {
     let mut rng = rand::thread_rng();
     let start_path_pos = rng.gen_range(1, tour.get_path().len() - 1);
     let start_vertex = tour.get_path()[start_path_pos];
     let start_vertex2 = tour.get_path()[start_path_pos + 1];
 
-    let mut removed = Vec::new();
+    added.clear();
+    removed.clear();
+
+//    let mut removed = Vec::new();
     removed.push((start_vertex, start_vertex2));
-    let mut added = Vec::new();
+//    let mut added = Vec::new();
 
     let mut current_vertex = start_vertex;
     let mut removed_sum = dist(tour.nodes[start_vertex], tour.nodes[start_vertex2]);
@@ -398,7 +404,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
 
             if let Some(len) = test_fast {
                 let pr = rng.gen::<f64>();
-                if len < tour.get_len() {
+                if len < tour.get_len() || (temp > 0.0 && ((tour.get_len() - len) / temp).exp() > pr) {
                     let (res, p) = tour.test_changes(&added, &removed).unwrap();
                     let new_tour = tour.make_new(p, );
 
@@ -413,21 +419,26 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
     } else {
         for i in 0..k {
             let mut next_vertex = 0;
+            cand_buf.clear();
+            cand_buf.extend(candidates[current_vertex].iter().filter(|&&(c, d)| d <= removed_sum - added_sum + base_limit).map(|&x| x.0));
             for _ in 0..100 {
-                let maybe_next_vertex = candidates[current_vertex]
+                let maybe_next_vertex = cand_buf.choose(&mut rng);
+                /*let maybe_next_vertex = candidates[current_vertex]
                     .choose_weighted(&mut rng, |x| {
                         if x.1 > removed_sum - added_sum + base_limit {
                             0.0
                         } else {
-                            let gain = tour.largest_dist_to_neigh(x.0) - x.1;
-                            (gain / 10.0).exp()
-                            //1.0
+                            //let gain = tour.largest_dist_to_neigh(x.0) - x.1;
+                            //(5.0 + gain).max(1.0)
+                            //(gain / 10.0).exp()
+                            1.0
                         }
-                    });
-                if maybe_next_vertex.is_err() {
+                    });*/
+
+                if maybe_next_vertex.is_none() {
                     break;
                 }
-                next_vertex = maybe_next_vertex.unwrap().0;
+                next_vertex = *maybe_next_vertex.unwrap();
                 if next_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
                     !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)){
                     break;
@@ -496,7 +507,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
 
                 if let Some(len) = test_fast {
                     let pr = rng.gen::<f64>();
-                    if len < tour.get_len() {
+                    if len < tour.get_len() || (temp > 0.0 && ((tour.get_len() - len) / temp).exp() > pr) {
                         let (res, p) = tour.test_changes(&added, &removed).unwrap();
                         let new_tour = tour.make_new(p, );
 
@@ -614,7 +625,8 @@ fn main() {
 
     let primes = Arc::new(get_primes(nodes.len()));
     let tour = Arc::new(Mutex::new(Tour::new(load_tour(&opt.load_from), nodes.clone(), primes.clone())));
-    let candidates = load_candidates(opt.cand_limit);
+    //let candidates = load_candidates(opt.cand_limit);
+    let candidates = load_candidates2(opt.cand_limit);
     let candidates_w = candidates.iter().enumerate().map(|(i, cc)| {
         cc.iter().enumerate().map(|(j, &c)| {
             let d = dist(nodes[i], nodes[c]);
@@ -622,7 +634,9 @@ fn main() {
         }).collect::<Vec<_>>()
         //cc.iter().map(|&c| (c, 1.0)).collect::<Vec<_>>()
     }).collect::<Vec<_>>();
-    println!("Hello, world! {:?} {:?} {:?}", nodes.len(), tour.lock().unwrap().get_path().len(), candidates.len());
+
+    //let candidates_w = load_candidates2(opt.cand_limit);
+    println!("Hello, world! {:?} {:?} {:?}", nodes.len(), tour.lock().unwrap().get_path().len(), candidates_w.len());
     println!("{:?}", &primes[..20]);
     println!("{:?}", verify_and_calculate_len(&nodes, &tour.lock().unwrap().get_path(), &primes));
     println!("{:?}", tour.lock().unwrap().check_nodes_edges().unwrap().0);
@@ -683,8 +697,11 @@ fn main() {
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
+            let mut added_v = vec!();
+            let mut removed_v = vec!();
+            let mut cand_buf = vec!();
             loop {
-                if let Some((new_tour, pr)) = do_opt(&mut our_tour, &our_candidates, 0.0, base_limit, "") {
+                if let Some((new_tour, pr)) = do_opt(&mut our_tour, &our_candidates, temp, base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf) {
                     {
                         let mut main_tour = main_tour_mutex.lock().unwrap();
                         if new_tour.get_len() < main_tour.get_len() || (temp > 0.0 && ((main_tour.get_len() - new_tour.get_len()) / temp).exp() > pr) {

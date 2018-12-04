@@ -283,7 +283,7 @@ impl Tour {
         if !duplicate {
             let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
             let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
-            removed_inds.sort();
+            removed_inds.sort_unstable();
 
             /*println!("rem {:?}", removed);
             println!("add {:?}", added);
@@ -404,7 +404,7 @@ impl Tour {
         if !duplicate {
             let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
             let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
-            removed_inds.sort();
+            removed_inds.sort_unstable();
             /*println!("rem {:?}", removed);
             println!("add {:?}", added);
             println!("rid {:?}", removed_inds);
