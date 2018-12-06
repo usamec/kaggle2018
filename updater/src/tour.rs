@@ -20,7 +20,7 @@ struct TwoEdges {
 
 impl TwoEdges {
     fn new() -> TwoEdges {
-        TwoEdges { edges: [NOEDGE, NOEDGE]}
+        TwoEdges { edges: [NOEDGE, NOEDGE] }
     }
 
     fn add(&mut self, node: usize) {
@@ -58,6 +58,43 @@ impl TwoEdges {
     fn rand(&self) -> usize {
         let mut rng = rand::thread_rng();
         self.edges[rng.gen_range(0, 2)]
+    }
+}
+
+#[derive(Clone)]
+pub struct BareTour {
+    pub nodes: Arc<Vec<(f64,f64)>>,
+    primes: Arc<Vec<bool>>,
+    path: Vec<usize>,
+    cur_len: f64,
+    cur_real_len: f64
+}
+
+impl BareTour {
+    pub fn new(path: Vec<usize>, nodes: Arc<Vec<(f64, f64)>>, primes: Arc<Vec<bool>>) -> BareTour {
+        let (cur_len, cur_real_len) = verify_and_calculate_len(&nodes, &path, &primes);
+
+        BareTour { nodes, path, primes, cur_len, cur_real_len }
+    }
+
+    pub fn get_path(&self) -> &[usize] {
+        &self.path
+    }
+
+    pub fn get_len(&self) -> f64 {
+        self.cur_len
+    }
+
+    pub fn get_real_len(&self) -> f64 {
+        self.cur_real_len
+    }
+
+    pub fn make_new(&self, path: Vec<usize>) -> BareTour {
+        BareTour::new(path, self.nodes.clone(), self.primes.clone())
+    }
+
+    pub fn to_tour(&self) -> Tour {
+        Tour::new(self.path.clone(), self.nodes.clone(), self.primes.clone())
     }
 }
 
@@ -117,6 +154,21 @@ impl Tour {
         Tour { nodes, path, primes, inv, per_nodes_edges, cur_len, prefix_lens, prefix_lens_offset, prefix_lens_offset_rev, cur_real_len }
     }
 
+    pub fn penalties(&self) -> Vec<(usize, usize, f64)> {
+        let mut out = Vec::new();
+        for i in 0..self.path.len()-1 {
+            let current_len = dist(self.nodes[self.path[i]], self.nodes[self.path[i+1]]);
+            if (i + 1) % 10 == 0 {
+                if !self.primes[self.path[i]] {
+                    out.push((self.path[i], self.path[i+1],current_len * 0.1));
+                } else {
+                    out.push((self.path[i], self.path[i+1], 0.0));
+                }
+            }
+        }
+        out
+    }
+
     pub fn hash(&self) -> usize {
         let mut hash = DefaultHasher::new();
         self.path.hash(&mut hash);
@@ -125,6 +177,10 @@ impl Tour {
 
     pub fn make_new(&self, path: Vec<usize>) -> Tour {
         Tour::new(path, self.nodes.clone(), self.primes.clone())
+    }
+
+    pub fn recompute(self) -> Tour {
+        Tour::new(self.path, self.nodes.clone(), self.primes.clone())
     }
 
     pub fn get_path(&self) -> &[usize] {

@@ -16,6 +16,7 @@ pub use local_brute::full_optim;
 pub use union_find::UnionFind;
 
 pub use tour::Tour;
+pub use tour::BareTour;
 
 pub struct PenaltyConfig {
     pub base_penalty: f64,
