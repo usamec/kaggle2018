@@ -312,7 +312,7 @@ impl Tour {
         }
     }
 
-    pub fn count_cycles(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> usize {
+    pub fn count_cycles(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> (usize, Vec<(usize, usize)>) {
         let mut duplicate = false;
         for i in 0..removed.len() {
             for j in 0..i {
@@ -379,8 +379,10 @@ impl Tour {
                 }
             }
             let mut cycles = 1;
+            let mut cycle_parts = vec!();
             loop {
                 let maybe_cycle_start = used_added.iter().enumerate().find_map(|(i, x)| if !x { Some(i) } else { None });
+
                 match maybe_cycle_start {
                     None => break,
                     Some(cycle_start) => {
@@ -414,6 +416,8 @@ impl Tour {
                                 current = removed_inds[next_pos - 1];
                             }
 
+                            cycle_parts.push((next, current));
+
                             if current == start {
                                 break;
                             }
@@ -422,14 +426,14 @@ impl Tour {
                     }
                 }
             }
-            cycles
+            (cycles, cycle_parts)
             /*if used_added.iter().all(|&x| x) {
                 1
             } else {
                 47
             }*/
         } else {
-            1_000_000_000
+            (1_000_000_000, vec!())
         }
     }
 
