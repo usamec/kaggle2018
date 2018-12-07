@@ -312,7 +312,7 @@ impl Tour {
         }
     }
 
-    pub fn count_cycles(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> (usize, Vec<(usize, usize)>) {
+    fn check_duplicates(added: &[(usize, usize)], removed: &[(usize, usize)]) -> bool {
         let mut duplicate = false;
         for i in 0..removed.len() {
             for j in 0..i {
@@ -335,8 +335,11 @@ impl Tour {
                 }
             }
         }
+        duplicate
+    }
 
-        if !duplicate {
+    pub fn count_cycles(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> (usize, Vec<(usize, usize)>) {
+        if !Tour::check_duplicates(added, removed) {
             let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
             let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
             removed_inds.sort_unstable();
@@ -438,30 +441,7 @@ impl Tour {
     }
 
     pub fn test_changes_fast(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> Option<f64> {
-        let mut duplicate = false;
-        for i in 0..removed.len() {
-            for j in 0..i {
-                if removed[i] == removed[j] {
-                    duplicate = true;
-                }
-                if removed[i].0 == removed[j].1 && removed[i].1 == removed[j].0 {
-                    duplicate = true;
-                }
-            }
-        }
-
-        for i in 0..added.len() {
-            for j in 0..removed.len() {
-                if added[i] == removed[j] {
-                    duplicate = true;
-                }
-                if added[i].0 == removed[j].1 && added[i].1 == removed[j].0 {
-                    duplicate = true;
-                }
-            }
-        }
-
-        if !duplicate {
+        if !Tour::check_duplicates(added, removed) {
             let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
             let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
             removed_inds.sort_unstable();

@@ -169,7 +169,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                     let mut good = true;
 
                     added.push((current_vertex, start_vertex2));
-                    let cycles = tour.count_cycles(&added, &removed);
+                    let (cycles, _) = tour.count_cycles(&added, &removed);
                     let left = k - i - 1;
                     if cycles > left + 1 && cycles < 1_000_000 {
                         good = false;

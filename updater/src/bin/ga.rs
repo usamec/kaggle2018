@@ -158,7 +158,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                     let mut good = true;
 
                     added.push((current_vertex, start_vertex2));
-                    let cycles = tour.count_cycles(&added, &removed);
+                    let (cycles, _) = tour.count_cycles(&added, &removed);
                     let left = k - i - 1;
                     if cycles > left + 1 && cycles < 1_000_000 {
                         good = false;
@@ -469,8 +469,8 @@ fn eax(t1: &BareTour, t2: &BareTour) -> Option<BareTour> {
 
     let clean_added = added.iter().filter(|&&(a, b)| !removed.contains(&(a,b))).map(|x| *x).collect::<Vec<_>>();
     let clean_removed = removed.iter().filter(|&&(a, b)| !added.contains(&(a,b))).map(|x| *x).collect::<Vec<_>>();
-    println!("{} {} {} {}", added.len(), removed.len(), clean_added.len(), clean_removed.len());scre
-    println!("made {} cycles", tt1.count_cycles(&clean_added, &clean_removed));
+    println!("{} {} {} {}", added.len(), removed.len(), clean_added.len(), clean_removed.len());
+    println!("made {} cycles", tt1.count_cycles(&clean_added, &clean_removed).0);
 
     None
 }
