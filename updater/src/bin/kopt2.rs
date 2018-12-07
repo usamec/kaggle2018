@@ -153,68 +153,78 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limi
     if added_sum - removed_sum > base_limit {
         return None;
     }
+
     cycle_parts.iter_mut().for_each(|p| {
         *p = (p.0.min(p.1), p.0.max(p.1))
     });
 
-    if cycle_parts[0].1 - cycle_parts[0].0 < 3 || cycle_parts.len() > 1 {
+    /*if cycle_parts.len() > 1 {
+        return None;
+    }*/
+
+    if cycle_parts.iter().all(|x| x.1 - x.0 < 3) {
         return None;
     }
 
-    for s in cycle_parts[0].0..cycle_parts[0].1 {
-        let v1 = tour.get_path()[s];
-        let v2 = tour.get_path()[s+1];
+    for cp in &cycle_parts {
+        if cp.1 - cp.0 < 3 {
+            continue
+        }
+        for s in cp.0..cp.1 {
+            let v1 = tour.get_path()[s];
+            let v2 = tour.get_path()[s + 1];
 
-        for &(c1, _) in &candidates[v1] {
-            if c1 == v2 {
-                continue;
-            }
-
-            let i1 = tour.get_inv()[c1];
-            if i1 > cycle_parts[0].0 && i1 < cycle_parts[0].1 {
-                continue
-            }
-            for &(c2, _) in &candidates[v2] {
-                if c2 == v1 {
+            for &(c1, _) in &candidates[v1] {
+                if c1 == v2 {
                     continue;
                 }
 
-                let i2 = tour.get_inv()[c2];
-                if i2 > cycle_parts[0].0 && i2 < cycle_parts[0].1 {
+                let i1 = tour.get_inv()[c1];
+                if cycle_parts.iter().any(|cpx| i1 > cpx.0 && i1 < cpx.1) {
                     continue
                 }
-
-
-                if i2 == i1 + 1 || i2 == i1 - 1 {
-                    added.push((v1, c1));
-                    added_sum += dist(tour.nodes[v1], tour.nodes[c1]);
-                    added.push((v2, c2));
-                    added_sum += dist(tour.nodes[v2], tour.nodes[c2]);
-                    removed.push((v1, v2));
-                    removed_sum += dist(tour.nodes[v1], tour.nodes[v2]);
-                    removed.push((c2, c1));
-                    removed_sum += dist(tour.nodes[c2], tour.nodes[c1]);
-
-                    if added_sum - removed_sum < base_limit {
-                        let test_fast = tour.test_changes_fast(&added, &removed);
-                        if let Some(len) = test_fast {
-                            if len < tour.get_len() {
-                                let (res, p) = tour.test_changes(&added, &removed).unwrap();
-                                let new_tour = tour.make_new(p, );
-                                println!("{}accept nonseq {} real {}, added len {} a - r {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum);
-                                return Some((new_tour, rand::thread_rng().gen::<f64>()));
-                            }
-                        }
+                for &(c2, _) in &candidates[v2] {
+                    if c2 == v1 {
+                        continue;
                     }
 
-                    added_sum -= dist(tour.nodes[v1], tour.nodes[c1]);
-                    added_sum -= dist(tour.nodes[v2], tour.nodes[c2]);
-                    removed_sum -= dist(tour.nodes[v1], tour.nodes[v2]);
-                    removed_sum -= dist(tour.nodes[c2], tour.nodes[c1]);
-                    added.pop();
-                    added.pop();
-                    removed.pop();
-                    removed.pop();
+                    let i2 = tour.get_inv()[c2];
+                    if cycle_parts.iter().any(|cpx| i1 > cpx.0 && i1 < cpx.1) {
+                        continue
+                    }
+
+
+                    if i2 == i1 + 1 || i2 == i1 - 1 {
+                        added.push((v1, c1));
+                        added_sum += dist(tour.nodes[v1], tour.nodes[c1]);
+                        added.push((v2, c2));
+                        added_sum += dist(tour.nodes[v2], tour.nodes[c2]);
+                        removed.push((v1, v2));
+                        removed_sum += dist(tour.nodes[v1], tour.nodes[v2]);
+                        removed.push((c2, c1));
+                        removed_sum += dist(tour.nodes[c2], tour.nodes[c1]);
+
+                        if added_sum - removed_sum < base_limit {
+                            let test_fast = tour.test_changes_fast(&added, &removed);
+                            if let Some(len) = test_fast {
+                                if len < tour.get_len() {
+                                    let (res, p) = tour.test_changes(&added, &removed).unwrap();
+                                    let new_tour = tour.make_new(p, );
+                                    println!("{}accept nonseq {} real {}, added len {} a - r {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum);
+                                    return Some((new_tour, rand::thread_rng().gen::<f64>()));
+                                }
+                            }
+                        }
+
+                        added_sum -= dist(tour.nodes[v1], tour.nodes[c1]);
+                        added_sum -= dist(tour.nodes[v2], tour.nodes[c2]);
+                        removed_sum -= dist(tour.nodes[v1], tour.nodes[v2]);
+                        removed_sum -= dist(tour.nodes[c2], tour.nodes[c1]);
+                        added.pop();
+                        added.pop();
+                        removed.pop();
+                        removed.pop();
+                    }
                 }
             }
         }
@@ -379,7 +389,15 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                         }
                         added_sum -= dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
                         removed_sum -= dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
-                    }
+                    } /*else if cycles == 3 {
+                        removed_sum += dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
+                        added_sum += dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
+                        if let Some(r) = patch3(tour, candidates, temp, base_limit, log_prefix, added, removed, cand_buf, cycle_parts, added_sum, removed_sum) {
+                            return Some(r);
+                        }
+                        added_sum -= dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
+                        removed_sum -= dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
+                    }*/
 
                     added.pop();
 
