@@ -195,13 +195,15 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limi
                     removed.push((c2, c1));
                     removed_sum += dist(tour.nodes[c2], tour.nodes[c1]);
 
-                    let test_fast = tour.test_changes_fast(&added, &removed);
-                    if let Some(len) = test_fast {
-                        if len < tour.get_len() {
-                            let (res, p) = tour.test_changes(&added, &removed).unwrap();
-                            let new_tour = tour.make_new(p, );
-                            println!("{}accept nonseq {} real {}, added len {} a - r {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum);
-                            return Some((new_tour, rand::thread_rng().gen::<f64>()));
+                    if added_sum - removed_sum < base_limit {
+                        let test_fast = tour.test_changes_fast(&added, &removed);
+                        if let Some(len) = test_fast {
+                            if len < tour.get_len() {
+                                let (res, p) = tour.test_changes(&added, &removed).unwrap();
+                                let new_tour = tour.make_new(p, );
+                                println!("{}accept nonseq {} real {}, added len {} a - r {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum);
+                                return Some((new_tour, rand::thread_rng().gen::<f64>()));
+                            }
                         }
                     }
 
@@ -369,7 +371,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                         good = false;
                     }
 
-                    /*if cycles == 2 {
+                    if cycles == 2 {
                         removed_sum += dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
                         added_sum += dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
                         if let Some(r) = patch(tour, candidates, temp, base_limit, log_prefix, added, removed, cand_buf, cycle_parts, added_sum, removed_sum) {
@@ -377,7 +379,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                         }
                         added_sum -= dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
                         removed_sum -= dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
-                    }*/
+                    }
 
                     added.pop();
 
@@ -613,7 +615,7 @@ fn main() {
                     //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
                 }
                 cc += 1;
-                if cc % 10000 == 0 {
+                if cc % 1000000 == 0 {
                     println!("cc {} {}", cc, thread_id);
                 }
                 if main_tour_hash.load(Ordering::Relaxed) != our_tour_hash {
