@@ -2,6 +2,7 @@ extern crate updater;
 extern crate rand;
 #[macro_use]
 extern crate structopt;
+extern crate chrono;
 
 use updater::*;
 use std::rc::Rc;
@@ -19,6 +20,8 @@ use std::io::stdout;
 use std::iter;
 use std::time;
 use std::fs;
+use chrono::Local;
+
 
 /// The logistic aka sigmoid function.
 #[inline]
@@ -149,10 +152,102 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>]) -> Option<Tour> {
     }
 }
 
-fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>, mut cycle_parts: Vec<(usize, usize)>, mut added_sum: f64, mut removed_sum: f64) -> Option<(Tour, f64)> {
+fn patch3(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>, mut all_cycle_parts: Vec<Vec<(usize, usize)>>, mut added_sum: f64, mut removed_sum: f64) -> Option<(Tour, f64)> {
+    //println!("{:?}", all_cycle_parts);
+
+    /*let mut cycle_parts_iter = all_cycle_parts.into_iter();
+    let mut cycle_parts1 = cycle_parts_iter.next().unwrap();
+
+    cycle_parts1.iter_mut().for_each(|p| {
+        *p = (p.0.min(p.1), p.0.max(p.1))
+    });
+
+    let mut cycle_parts2 = cycle_parts_iter.next().unwrap();
+
+    cycle_parts2.iter_mut().for_each(|p| {
+        *p = (p.0.min(p.1), p.0.max(p.1))
+    });
+
+    if cycle_parts1.iter().all(|x| x.1 - x.0 < 3) {
+        return None;
+    }
+
+    if cycle_parts2.iter().all(|x| x.1 - x.0 < 3) {
+        return None;
+    }*/
+
+    let cycle_parts = all_cycle_parts.choose(&mut rand::thread_rng()).unwrap();
+
+    for &cp in cycle_parts {
+        if cp.1 - cp.0 < 3 {
+            continue
+        }
+        for s in cp.0..cp.1 {
+            let v1 = tour.get_path()[s];
+            let v2 = tour.get_path()[s + 1];
+
+            for &(c1, _) in &candidates[v1] {
+                if c1 == v2 {
+                    continue;
+                }
+
+                let i1 = tour.get_inv()[c1];
+                if cycle_parts.iter().any(|cpx| i1 > cpx.0 && i1 < cpx.1) {
+                    continue
+                }
+                for &(c2, _) in &candidates[v2] {
+                    if c2 == v1 {
+                        continue;
+                    }
+
+                    let i2 = tour.get_inv()[c2];
+                    if cycle_parts.iter().any(|cpx| i1 > cpx.0 && i1 < cpx.1) {
+                        continue
+                    }
+
+
+                    if i2 == i1 + 1 || i2 == i1 - 1 {
+                        added.push((v1, c1));
+                        added_sum += dist(tour.nodes[v1], tour.nodes[c1]);
+                        added.push((v2, c2));
+                        added_sum += dist(tour.nodes[v2], tour.nodes[c2]);
+                        removed.push((v1, v2));
+                        removed_sum += dist(tour.nodes[v1], tour.nodes[v2]);
+                        removed.push((c2, c1));
+                        removed_sum += dist(tour.nodes[c2], tour.nodes[c1]);
+
+                        if added_sum - removed_sum < base_limit {
+                            let (cycles, cycle_parts) = tour.count_cycles(&added, &removed);
+                            if cycles == 2 {
+                                if let Some(r) = patch(tour, candidates, temp, base_limit, log_prefix, added, removed, cand_buf, cycle_parts, added_sum, removed_sum) {
+                                    //panic!("bu");
+                                    return Some(r);
+                                }
+                            }
+                        }
+
+                        added_sum -= dist(tour.nodes[v1], tour.nodes[c1]);
+                        added_sum -= dist(tour.nodes[v2], tour.nodes[c2]);
+                        removed_sum -= dist(tour.nodes[v1], tour.nodes[v2]);
+                        removed_sum -= dist(tour.nodes[c2], tour.nodes[c1]);
+                        added.pop();
+                        added.pop();
+                        removed.pop();
+                        removed.pop();
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>, mut all_cycle_parts: Vec<Vec<(usize, usize)>>, mut added_sum: f64, mut removed_sum: f64) -> Option<(Tour, f64)> {
     if added_sum - removed_sum > base_limit {
         return None;
     }
+
+    let mut cycle_parts = all_cycle_parts.into_iter().next().unwrap();
 
     cycle_parts.iter_mut().for_each(|p| {
         *p = (p.0.min(p.1), p.0.max(p.1))
@@ -389,7 +484,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                         }
                         added_sum -= dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
                         removed_sum -= dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
-                    } /*else if cycles == 3 {
+                    } else if cycles == 3 && rand::thread_rng().gen_range(0, 10) == 0 {
                         removed_sum += dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
                         added_sum += dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
                         if let Some(r) = patch3(tour, candidates, temp, base_limit, log_prefix, added, removed, cand_buf, cycle_parts, added_sum, removed_sum) {
@@ -397,7 +492,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                         }
                         added_sum -= dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
                         removed_sum -= dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
-                    }*/
+                    }
 
                     added.pop();
 
@@ -516,7 +611,10 @@ struct Config {
     min_penalty: f64,
 
     #[structopt(short = "bl", long = "base-limit", default_value = "3.0")]
-    base_limit: f64
+    base_limit: f64,
+
+    #[structopt(short = "st", long = "timestamp")]
+    save_timestamp: bool
 }
 
 fn main() {
@@ -691,6 +789,7 @@ fn main() {
 
     // writer thread
     {
+        let save_timestamp = opt.save_timestamp;
         let main_tour_mutex = Arc::clone(&tour);
         let main_tour_hash = Arc::clone(&tour_hash);
         let prefix = opt.save_to.clone();
@@ -707,7 +806,12 @@ fn main() {
                     main_tour.save(&format!("{}-tmp.csv", prefix));
                     fs::rename(&format!("{}-tmp.csv", prefix), &format!("{}-latest.csv", prefix));
                     if main_tour.get_len() < best_len {
-                        fs::copy(&format!("{}-latest.csv", prefix), &format!("{}-best.csv", prefix));
+                        if save_timestamp {
+                            let date = Local::now();
+                            fs::copy(&format!("{}-latest.csv", prefix), &format!("{}-best-{}.csv", prefix, date.format("%Y-%m-%dT%H:%M:%S")));
+                        } else {
+                            fs::copy(&format!("{}-latest.csv", prefix), &format!("{}-best.csv", prefix));
+                        }
                         best_len = main_tour.get_len();
                     }
 

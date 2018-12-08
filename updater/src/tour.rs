@@ -315,6 +315,9 @@ impl Tour {
     fn check_duplicates(added: &[(usize, usize)], removed: &[(usize, usize)]) -> bool {
         let mut duplicate = false;
         for i in 0..removed.len() {
+            if removed[i].0 == 0 || removed[i].1 == 0 {
+                return false;
+            }
             for j in 0..i {
                 if removed[i] == removed[j] {
                     duplicate = true;
@@ -326,6 +329,9 @@ impl Tour {
         }
 
         for i in 0..added.len() {
+            if added[i].0 == 0 || added[i].1 == 0 {
+                return false;
+            }
             for j in 0..removed.len() {
                 if added[i] == removed[j] {
                     duplicate = true;
@@ -338,7 +344,7 @@ impl Tour {
         duplicate
     }
 
-    pub fn count_cycles(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> (usize, Vec<(usize, usize)>) {
+    pub fn count_cycles(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> (usize, Vec<Vec<(usize, usize)>>) {
         if !Tour::check_duplicates(added, removed) {
             let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
             let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
@@ -382,9 +388,10 @@ impl Tour {
                 }
             }
             let mut cycles = 1;
-            let mut cycle_parts = vec!();
+            let mut all_cycle_parts = vec!();
             loop {
                 let maybe_cycle_start = used_added.iter().enumerate().find_map(|(i, x)| if !x { Some(i) } else { None });
+                let mut cycle_parts = vec!();
 
                 match maybe_cycle_start {
                     None => break,
@@ -428,8 +435,9 @@ impl Tour {
                         cycles += 1;
                     }
                 }
+                all_cycle_parts.push(cycle_parts);
             }
-            (cycles, cycle_parts)
+            (cycles, all_cycle_parts)
             /*if used_added.iter().all(|&x| x) {
                 1
             } else {
