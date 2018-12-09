@@ -32,88 +32,100 @@ pub fn sigmoid(f: f64) -> f64 {
 
 fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], thread_id: usize) -> Option<Tour> {
     let mut rng = rand::thread_rng();
-    let start_path_pos = rng.gen_range(1, tour.get_path().len() - 1);
-    let start_vertex = tour.get_path()[start_path_pos];
-    let start_vertex2 = tour.get_path()[start_path_pos+1];
 
-    let mut removed = Vec::new();
-    removed.push((start_vertex, start_vertex2));
-    let mut added = Vec::new();
+    let mut cur_tour = tour.clone();
 
-    let mut current_vertex = start_vertex;
-    let mut removed_sum = dist(tour.nodes[start_vertex], tour.nodes[start_vertex2]);
-    let mut added_sum = 0.0;
-    for i in 0..*[1,2].choose(&mut rng).unwrap() {
-        let mut next_vertex = 0;
-        for _ in 0..100 {
-            next_vertex = candidates[current_vertex].choose_weighted(&mut rng, |x| x.1).unwrap().0;
-            if next_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
-                !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)) {
-                if i != 0 || (tour.get_inv()[current_vertex] as i32 - tour.get_inv()[next_vertex] as i32).abs() > 100 {
-                    break;
+    let mut cc = 0;
+    loop {
+        let start_path_pos = rng.gen_range(1, cur_tour.get_path().len() - 1);
+        let start_vertex = cur_tour.get_path()[start_path_pos];
+        let start_vertex2 = cur_tour.get_path()[start_path_pos + 1];
+
+        let mut removed = Vec::new();
+        removed.push((start_vertex, start_vertex2));
+        let mut added = Vec::new();
+
+        let mut current_vertex = start_vertex;
+        let mut removed_sum = dist(cur_tour.nodes[start_vertex], cur_tour.nodes[start_vertex2]);
+        let mut added_sum = 0.0;
+        let mut good = true;
+        for i in 0..*[1, 2].choose(&mut rng).unwrap() {
+            let mut next_vertex = 0;
+            for _ in 0..100 {
+                next_vertex = candidates[current_vertex].choose_weighted(&mut rng, |x| x.1).unwrap().0;
+                if next_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
+                    !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)) {
+                    /*if i != 0 || (cur_tour.get_inv()[current_vertex] as i32 - cur_tour.get_inv()[next_vertex] as i32).abs() > 100*/ {
+                        break;
+                    }
                 }
+                next_vertex = 0;
             }
-            next_vertex = 0;
-        }
-        if next_vertex == 0 {
-            return None;
-        }
-        added_sum += dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
-        added.push((current_vertex, next_vertex));
-
-        /*if added_sum - removed_sum > 5.0 {
-            return None
-        }*/
-
-
-        current_vertex = 0;
-        for _ in 0..100 {
-            current_vertex = tour.rand_neighbour(next_vertex);
-            if current_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
-                !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)) {
+            if next_vertex == 0 {
+                good = false;
                 break;
             }
+            added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[next_vertex]);
+            added.push((current_vertex, next_vertex));
+
+            /*if added_sum - removed_sum > 5.0 {
+                return None
+            }*/
+
+
             current_vertex = 0;
+            for _ in 0..100 {
+                current_vertex = cur_tour.rand_neighbour(next_vertex);
+                if current_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
+                    !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)) {
+                    break;
+                }
+                current_vertex = 0;
+            }
+            if current_vertex == 0 {
+                good = false;
+                break;
+            }
+
+            removed_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[next_vertex]);
+            removed.push((next_vertex, current_vertex));
         }
-        if current_vertex == 0 {
-            return None;
+        if !good {
+            continue;
         }
 
-        removed_sum += dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
-        removed.push((next_vertex, current_vertex));
+        added.push((current_vertex, start_vertex2));
+        added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[start_vertex2]);
+
+        if added_sum - removed_sum > 10.0 {
+            continue;
+        }
+
+
+        let test_fast = cur_tour.test_changes_fast(&added, &removed);
+        if test_fast.is_none() {
+            continue;
+        }
+
+        let mut actual_len = test_fast.unwrap();
+        let start_len = cur_tour.get_len();
+        println!("test {} {}", actual_len, start_len);
+
+        if actual_len < start_len + 10.0 {
+            let (_, cur_tour_path) = cur_tour.test_changes(&added, &removed).unwrap();
+            cur_tour = cur_tour.make_new(cur_tour_path);
+            cc += 1;
+            println!("boo {}", cc);
+            if cc == 10 {
+                break;
+            }
+        }
     }
-
-    added.push((current_vertex, start_vertex2));
-    added_sum += dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
-
-    if added_sum - removed_sum > 1.0 {
-        return None
-    }
-
-
-
-    let test_fast = tour.test_changes_fast(&added, &removed);
-    if test_fast.is_none() {
-        return None;
-    }
-
-    let mut actual_len = test_fast.unwrap();
     let start_len = tour.get_len();
-
-    if actual_len > start_len + 50.0 {
-        return None;
-    }
-
-    let (_, cur_tour_path) = tour.test_changes(&added, &removed).unwrap();
-    let mut cur_tour = tour.make_new(cur_tour_path);
+    let mut actual_len = cur_tour.get_len();
     let mut actual_real_len = cur_tour.get_real_len();
 
-    let removed_inds = removed.iter().map(|x| iter::once(tour.get_inv()[x.0]).chain(iter::once(tour.get_inv()[x.1]))).flatten().collect::<Vec<_>>();
-
-    let min_removed = *removed_inds.iter().min().unwrap();
-    let max_removed = *removed_inds.iter().max().unwrap();
-
-    println!("go {} {} {} {} {} {}", added.len(), added_sum - removed_sum, start_len, actual_len, min_removed, max_removed);
+    println!("go {} {} ", start_len, actual_len);
 
 
     let mut last = 0;
@@ -156,11 +168,13 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], thread_id: usize) 
 
     Command::new("./recombinator").arg(&f1).arg(&f2).arg(&f3).arg(&cur_pen).status().expect("recomb failed");
 
-    cur_tour.make_new(load_tour(&f3));
+    cur_tour = cur_tour.make_new(load_tour(&f3));
     actual_len = cur_tour.get_len();
 
+    println!("after merge {} {}", actual_len, start_len);
+
     if actual_len < start_len {
-        println!("acceptx {} real {} added - removed {}", actual_len, actual_real_len, added_sum - removed_sum);
+        println!("acceptx {} real {}", actual_len, actual_real_len);
         stdout().flush();
         Some(cur_tour)
     } else {
