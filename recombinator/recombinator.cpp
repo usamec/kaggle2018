@@ -228,6 +228,7 @@ vector<int> recombine(
         int has_conflict = 0;
 
         for (int i = start2; i <= end2; i++) if (result[i] != pp2[i]) has_conflict = 1;
+        if (has_conflict) printf("skip due to conflict\n");
         if (has_conflict) continue;
         //printf("no conflict, could continue\n");
         //printf("merge\n");
@@ -244,7 +245,7 @@ vector<int> recombine(
           printf("have improvement: %.2lf\n", cur - best);
           result = tmp;
         } else {
-//          printf("%.2lf %.2lf\n", cur, cur - best);
+          //printf("%.2lf %.2lf\n", cur, cur - best);
         }
     }
   }
