@@ -265,13 +265,13 @@ int main(int argc, char* argv[]) {
   read_cities();
   auto path1 = read_path(argv[1]);
   auto path2 = read_path(argv[2]);
-  printf("start1 %.1lf\n", eval(path1, 0));
-  printf("start2 %.1lf\n", eval(path2, 0));
+  printf("start1 %.3lf\n", eval(path1, 0));
+  printf("start2 %.3lf\n", eval(path2, 0));
   auto recomba = recombine(path1, path2);
   auto recombb = recombine(path2, path1);
   auto evala = eval(recomba, 0);
   auto evalb = eval(recombb, 0);
-  printf("output %.1lf %.1lf\n", evala, evalb);
+  printf("output %.3lf %.3lf\n", evala, evalb);
   if (evala < evalb) {
       write_path(argv[3],recomba);
   } else {

@@ -21,7 +21,7 @@ use std::iter;
 use std::time;
 use std::fs;
 use chrono::Local;
-
+use std::process::Command;
 
 /// The logistic aka sigmoid function.
 #[inline]
@@ -30,7 +30,7 @@ pub fn sigmoid(f: f64) -> f64 {
     1.0 / (1.0 + E.powf(-f))
 }
 
-fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>]) -> Option<Tour> {
+fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], thread_id: usize) -> Option<Tour> {
     let mut rng = rand::thread_rng();
     let start_path_pos = rng.gen_range(1, tour.get_path().len() - 1);
     let start_vertex = tour.get_path()[start_path_pos];
@@ -143,6 +143,22 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>]) -> Option<Tour> {
             break;
         }
     }
+
+    let f1 = format!("tmp1-{}.csv", thread_id);
+    let f2 = format!("tmp2-{}.csv", thread_id);
+    let f3 = format!("tmp3-{}.csv", thread_id);
+    let cur_pen = unsafe {
+        format!("{}", penalty_config.base_penalty)
+    };
+
+    tour.save(&f1);
+    cur_tour.save(&f2);
+
+    Command::new("./recombinator").arg(&f1).arg(&f2).arg(&f3).arg(&cur_pen).status().expect("recomb failed");
+
+    cur_tour.make_new(load_tour(&f3));
+    actual_len = cur_tour.get_len();
+
     if actual_len < start_len {
         println!("acceptx {} real {} added - removed {}", actual_len, actual_real_len, added_sum - removed_sum);
         stdout().flush();
@@ -671,7 +687,7 @@ fn main() {
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour) = do_opt2(&mut our_tour, &our_candidates) {
+                if let Some(new_tour) = do_opt2(&mut our_tour, &our_candidates, thread_id) {
                     //println!("new len {}", new_tour.get_len());
                     {
                         let mut main_tour = main_tour_mutex.lock().unwrap();
