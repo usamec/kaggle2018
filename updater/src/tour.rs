@@ -316,7 +316,7 @@ impl Tour {
         let mut duplicate = false;
         for i in 0..removed.len() {
             if removed[i].0 == 0 || removed[i].1 == 0 {
-                return false;
+                return true;
             }
             for j in 0..i {
                 if removed[i] == removed[j] {
@@ -330,7 +330,7 @@ impl Tour {
 
         for i in 0..added.len() {
             if added[i].0 == 0 || added[i].1 == 0 {
-                return false;
+                return true;
             }
             for j in 0..removed.len() {
                 if added[i] == removed[j] {
@@ -450,6 +450,7 @@ impl Tour {
 
     pub fn test_changes_fast(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> Option<f64> {
         if !Tour::check_duplicates(added, removed) {
+
             let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
             let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
             removed_inds.sort_unstable();
