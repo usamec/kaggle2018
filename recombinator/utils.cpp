@@ -12,6 +12,7 @@ const int N = 197769;
 char is_prime[N];
 double x[N];
 double y[N];
+double penalty = 0.1;
 
 int check_prime(int i) {
   if (i < 2) return false;
@@ -82,7 +83,7 @@ double eval(const vector<int>& path, int shift) {
     double d = distance(path[i], path[i+1]);
     if ((i + 1 + shift) % 10 == 0
         && !is_prime[path[i]]) {
-      d *= 1.1;
+      d *= 1 + penalty;
     }
     total += d;
   }

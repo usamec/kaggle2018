@@ -244,7 +244,7 @@ vector<int> recombine(
           printf("have improvement: %.2lf\n", cur - best);
           result = tmp;
         } else {
-          printf("%.2lf %.2lf\n", cur, cur - best);
+//          printf("%.2lf %.2lf\n", cur, cur - best);
         }
     }
   }
@@ -252,18 +252,22 @@ vector<int> recombine(
 }
 
 int main(int argc, char* argv[]) {
-  if (argc != 4) {
+  if (argc != 4 && argc != 5) {
     assert(argc >= 1);
     printf("Usage: %s path1.csv path2.csv out.csv\n", argv[0]);
     return 1;
   }
+  if (argc == 5) {
+    penalty = atof(argv[4]);
+  }    
 
   gen_primes();
   read_cities();
   auto path1 = read_path(argv[1]);
   auto path2 = read_path(argv[2]);
-  printf("%.1lf\n", eval(path1, 0));
-  printf("%.1lf\n", eval(path2, 0));
+  printf("start1 %.1lf\n", eval(path1, 0));
+  printf("start2 %.1lf\n", eval(path2, 0));
   auto recomb = recombine(path1, path2);
+  printf("output %.1lf\n", eval(path2, 0));
   write_path(argv[3], recomb);
 }
