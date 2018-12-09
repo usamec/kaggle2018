@@ -150,10 +150,14 @@ vector<int> reconstruct(
 }
 
 // recombine from path1 into path2
-vector<int> recombinatione(
+vector<int> recombine(
   const vector<int>& path1,
   const vector<int>& path2
 ) {
+  if (path1 == path2) {
+    printf("paths are same\n");
+    return path1;
+  }
   const int N = path1.size();
   { // checks
     assert(path1.size() == path2.size());
@@ -187,9 +191,10 @@ vector<int> recombinatione(
   { // checks
     printf("checks 2\n");
     assert(t1.size() == t2.size());
-    //auto tmp1 = untrim(skip, t1);
+    auto tmp1 = untrim(skip, t1);
+    assert(tmp1.size() == p1.size());
+    assert(tmp1 == p1);
     auto tmp2 = untrim(skip, t2);
-    //assert(tmp1 == p1);
     //printf("%d %d\n", tmp1.size(), tmp2.size());
     assert(tmp2 == p2);
     printf("done\n");
@@ -259,6 +264,6 @@ int main(int argc, char* argv[]) {
   auto path2 = read_path(argv[2]);
   printf("%.1lf\n", eval(path1, 0));
   printf("%.1lf\n", eval(path2, 0));
-  auto recomb = recombinatione(path1, path2);
+  auto recomb = recombine(path1, path2);
   write_path(argv[3], recomb);
 }
