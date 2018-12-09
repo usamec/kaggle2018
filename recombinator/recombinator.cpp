@@ -267,7 +267,14 @@ int main(int argc, char* argv[]) {
   auto path2 = read_path(argv[2]);
   printf("start1 %.1lf\n", eval(path1, 0));
   printf("start2 %.1lf\n", eval(path2, 0));
-  auto recomb = recombine(path1, path2);
-  printf("output %.1lf\n", eval(path2, 0));
-  write_path(argv[3], recomb);
+  auto recomba = recombine(path1, path2);
+  auto recombb = recombine(path2, path1);
+  auto evala = eval(recomba, 0);
+  auto evalb = eval(recombb, 0);
+  printf("output %.1lf %.1lf\n", evala, evalb);
+  if (evala < evalb) {
+      write_path(argv[3],recomba);
+  } else {
+      write_path(argv[3],recombb);
+  }
 }
