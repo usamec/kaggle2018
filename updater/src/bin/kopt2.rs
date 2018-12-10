@@ -30,7 +30,23 @@ pub fn sigmoid(f: f64) -> f64 {
     1.0 / (1.0 + E.powf(-f))
 }
 
-fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], thread_id: usize) -> Option<Tour> {
+fn merge(a: &Tour, b: &Tour, prefix: &str) -> Tour {
+    let f1 = format!("{}-1.csv", prefix);
+    let f2 = format!("{}-2.csv", prefix);
+    let f3 = format!("{}-3.csv", prefix);
+    let cur_pen = unsafe {
+        format!("{}", penalty_config.base_penalty)
+    };
+
+    a.save(&f1);
+    b.save(&f2);
+
+    Command::new("./recombinator").arg(&f1).arg(&f2).arg(&f3).arg(&cur_pen).status().expect("recomb failed");
+
+    a.make_new(load_tour(&f3))
+}
+
+fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> Option<Tour> {
     let mut rng = rand::thread_rng();
 
     let mut cur_tour = tour.clone();
@@ -68,8 +84,9 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], thread_id: usize) 
             added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[next_vertex]);
             added.push((current_vertex, next_vertex));
 
-            /*if added_sum - removed_sum > 5.0 {
-                return None
+            /*if added_sum - removed_sum > 10.0 {
+                good = false;
+                break;
             }*/
 
 
@@ -156,25 +173,166 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], thread_id: usize) 
         }
     }
 
-    let f1 = format!("tmp1-{}.csv", thread_id);
-    let f2 = format!("tmp2-{}.csv", thread_id);
-    let f3 = format!("tmp3-{}.csv", thread_id);
+    let f1 = format!("{}-1.csv", prefix);
+    let f2 = format!("{}-2.csv", prefix);
+    let f3 = format!("{}-3.csv", prefix);
     let cur_pen = unsafe {
         format!("{}", penalty_config.base_penalty)
     };
 
-    tour.save(&f1);
-    cur_tour.save(&f2);
-
-    Command::new("./recombinator").arg(&f1).arg(&f2).arg(&f3).arg(&cur_pen).status().expect("recomb failed");
-
-    cur_tour = cur_tour.make_new(load_tour(&f3));
+    cur_tour = merge(&cur_tour, &tour, prefix);
     actual_len = cur_tour.get_len();
 
     println!("after merge {} {}", actual_len, start_len);
 
     if actual_len < start_len {
-        println!("acceptx {} real {}", actual_len, actual_real_len);
+        stdout().flush();
+        Some(cur_tour)
+    } else {
+        None
+    }
+}
+
+fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> Option<Tour> {
+    let mut rng = rand::thread_rng();
+
+    let mut cur_tour = tour.clone();
+
+    let mut cc = 0;
+    loop {
+        let start_path_pos = rng.gen_range(1, cur_tour.get_path().len() - 1);
+        let start_vertex = cur_tour.get_path()[start_path_pos];
+        let start_vertex2 = cur_tour.get_path()[start_path_pos + 1];
+
+        let mut removed = Vec::new();
+        removed.push((start_vertex, start_vertex2));
+        let mut added = Vec::new();
+
+        let mut current_vertex = start_vertex;
+        let mut removed_sum = dist(cur_tour.nodes[start_vertex], cur_tour.nodes[start_vertex2]);
+        let mut added_sum = 0.0;
+        let mut good = true;
+        for i in 0..7 {
+            let mut next_vertex = 0;
+            for _ in 0..100 {
+                next_vertex = candidates[current_vertex].choose_weighted(&mut rng, |x| x.1).unwrap().0;
+                if next_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
+                    !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)) {
+                    /*if i != 0 || (cur_tour.get_inv()[current_vertex] as i32 - cur_tour.get_inv()[next_vertex] as i32).abs() > 100*/ {
+                        break;
+                    }
+                }
+                next_vertex = 0;
+            }
+            if next_vertex == 0 {
+                good = false;
+                break;
+            }
+            added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[next_vertex]);
+            added.push((current_vertex, next_vertex));
+
+            if added_sum - removed_sum > 10.0 {
+                good = false;
+                break;
+            }
+
+
+            current_vertex = 0;
+            for _ in 0..100 {
+                current_vertex = cur_tour.rand_neighbour(next_vertex);
+                if current_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
+                    !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)) {
+                    break;
+                }
+                current_vertex = 0;
+            }
+            if current_vertex == 0 {
+                good = false;
+                break;
+            }
+
+            removed_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[next_vertex]);
+            removed.push((next_vertex, current_vertex));
+        }
+        if !good {
+            continue;
+        }
+
+        added.push((current_vertex, start_vertex2));
+        added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[start_vertex2]);
+
+        if added_sum - removed_sum > 10.0 {
+            continue;
+        }
+
+
+        let test_fast = cur_tour.test_changes_fast(&added, &removed);
+        if test_fast.is_none() {
+            continue;
+        }
+
+        let mut actual_len = test_fast.unwrap();
+        let start_len = cur_tour.get_len();
+        println!("test {} {}", actual_len, start_len);
+
+        if actual_len < start_len + 20.0 {
+            let (_, cur_tour_path) = cur_tour.test_changes(&added, &removed).unwrap();
+            cur_tour = cur_tour.make_new(cur_tour_path);
+            cc += 1;
+            println!("boo {}", cc);
+            if cc == 10 {
+                break;
+            }
+        }
+    }
+    let start_len = tour.get_len();
+    let mut actual_len = cur_tour.get_len();
+    let mut actual_real_len = cur_tour.get_real_len();
+
+    println!("go {} {} ", start_len, actual_len);
+
+
+    let mut last = 0;
+    let mut fouls = 0;
+    let mut added_v = vec!();
+    let mut removed_v = vec!();
+    let mut cand_buf = vec!();
+    for i in 0..1_000_000_000 {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, 3.0, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf) {
+            if new_tour.get_path() != tour.get_path() {
+                if new_tour.get_len() < actual_len {
+                    actual_len = new_tour.get_len();
+                    actual_real_len = new_tour.get_real_len();
+                    println!("bet {} {}", actual_len, start_len);
+                    last = i;
+                    cur_tour = new_tour;
+                    fouls = 0;
+                }
+            } else {
+                fouls += 1;
+                if fouls == 10 {
+                    break;
+                }
+            }
+        }
+        if i - last > 1_000_000 {
+            break;
+        }
+    }
+
+    let f1 = format!("{}-1.csv", prefix);
+    let f2 = format!("{}-2.csv", prefix);
+    let f3 = format!("{}-3.csv", prefix);
+    let cur_pen = unsafe {
+        format!("{}", penalty_config.base_penalty)
+    };
+
+    cur_tour = merge(&cur_tour, &tour, prefix);
+    actual_len = cur_tour.get_len();
+
+    println!("after merge {} {}", actual_len, start_len);
+
+    if actual_len < start_len {
         stdout().flush();
         Some(cur_tour)
     } else {
@@ -335,7 +493,7 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limi
                                 if len < tour.get_len() {
                                     let (res, p) = tour.test_changes(&added, &removed).unwrap();
                                     let new_tour = tour.make_new(p, );
-                                    println!("{}accept nonseq {} real {}, added len {} a - r {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum);
+                                    println!("{}accept nonseq {} real {}, added len {} a - r {} {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                                     return Some((new_tour, rand::thread_rng().gen::<f64>()));
                                 }
                             }
@@ -553,7 +711,7 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                         let (res, p) = tour.test_changes(&added, &removed).unwrap();
                         let new_tour = tour.make_new(p, );
 
-                        println!("{}accept {} {} real {}, added len {} added - removed {}", log_prefix, i+2, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum);
+                        println!("{}accept {} {} real {}, added len {} added - removed {} {}", log_prefix, i+2, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                         stdout().flush();
                         return Some((new_tour, pr));
                     } else {
@@ -691,25 +849,74 @@ fn main() {
     let mut handles = vec![];
     let temp = opt.temp;
     println!("temp {}", temp);
-    for thread_id in 0..opt.n_heavy_threads {
+    for thread_id in 0..opt.n_heavy_threads/2 {
         let main_tour_mutex = Arc::clone(&tour);
         let main_tour_hash = Arc::clone(&tour_hash);
         let our_candidates = candidates_w.clone();
-        let prefix = opt.save_to.clone();
+        let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
         let handle = thread::spawn(move || {
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour) = do_opt2(&mut our_tour, &our_candidates, thread_id) {
+                if let Some(new_tour_base) = do_opt2(&mut our_tour, &our_candidates, &prefix) {
                     //println!("new len {}", new_tour.get_len());
                     {
-                        let mut main_tour = main_tour_mutex.lock().unwrap();
+                        let main_tour = main_tour_mutex.lock().unwrap().clone();
+
+                        let new_tour = merge(&new_tour_base, &main_tour, &prefix);
                         if new_tour.get_len() < main_tour.get_len() {
+                            println!("acceptxa {} real {} {}", new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
                             our_tour = new_tour;
                             our_tour_hash = our_tour.hash();
 
 
+                            let mut main_tour = main_tour_mutex.lock().unwrap();
+                            *main_tour = our_tour.clone();
+                            main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
+                        }
+                    }
+                    //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
+                }
+                cc += 1;
+                if cc % 1000000 == 0 {
+                    println!("cc {} {}", cc, thread_id);
+                }
+                if main_tour_hash.load(Ordering::Relaxed) != our_tour_hash {
+                    println!("reload {} {}", thread_id, cc);
+                    let main_tour = main_tour_mutex.lock().unwrap();
+                    our_tour = main_tour.clone();
+                    our_tour_hash = our_tour.hash();
+                }
+
+            }
+        });
+        handles.push(handle);
+    }
+
+    for thread_id in opt.n_heavy_threads/2..opt.n_heavy_threads {
+        let main_tour_mutex = Arc::clone(&tour);
+        let main_tour_hash = Arc::clone(&tour_hash);
+        let our_candidates = candidates_w.clone();
+        let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
+        let handle = thread::spawn(move || {
+            let mut cc = 0;
+            let mut our_tour = main_tour_mutex.lock().unwrap().clone();
+            let mut our_tour_hash = our_tour.hash();
+            loop {
+                if let Some(new_tour_base) = do_opt2b(&mut our_tour, &our_candidates, &prefix) {
+                    //println!("new len {}", new_tour.get_len());
+                    {
+                        let main_tour = main_tour_mutex.lock().unwrap().clone();
+
+                        let new_tour = merge(&new_tour_base, &main_tour, &prefix);
+                        if new_tour.get_len() < main_tour.get_len() {
+                            println!("acceptxb {} real {} {}", new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
+                            our_tour = new_tour;
+                            our_tour_hash = our_tour.hash();
+
+
+                            let mut main_tour = main_tour_mutex.lock().unwrap();
                             *main_tour = our_tour.clone();
                             main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
                         }
