@@ -253,13 +253,16 @@ vector<int> recombine(
 }
 
 int main(int argc, char* argv[]) {
-  if (argc != 4 && argc != 5) {
+  if (argc != 4 && argc != 5 && argc != 6) {
     assert(argc >= 1);
     printf("Usage: %s path1.csv path2.csv out.csv\n", argv[0]);
     return 1;
   }
-  if (argc == 5) {
+  if (argc >= 5) {
     penalty = atof(argv[4]);
+  }    
+  if (argc >= 6) {
+    penalty_threshold = atof(argv[5]);
   }    
 
   gen_primes();

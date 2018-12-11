@@ -109,7 +109,9 @@ pub struct Tour {
     cur_real_len: f64,
     prefix_lens: Vec<f64>,
     prefix_lens_offset: [Vec<f64>; 10],
-    prefix_lens_offset_rev: [Vec<f64>; 10]
+    prefix_lens_offset_rev: [Vec<f64>; 10],
+    pub penalty_hash: usize,
+    pub big_lens_count: usize
 }
 
 fn path_to_edges(path: &[usize]) -> Vec<TwoEdges> {
@@ -138,10 +140,15 @@ impl Tour {
             prefix_lens.push(ll);
         }
 
+        let mut big_lens = Vec::new();
+
         let mut prefix_lens_offset = [vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0]];
         let mut prefix_lens_offset_rev = [vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0]];
         for i in 0..path.len()-1 {
             let current_len = dist(nodes[path[i]], nodes[path[i+1]]);
+            if current_len > 30.0 && i % 10 == 9 && !primes[i] {
+                big_lens.push((path[i], path[i+1]));
+            }
             for j in 0..10 {
                 let ll = prefix_lens_offset[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i], &primes);
                 prefix_lens_offset[j].push(ll);
@@ -151,7 +158,13 @@ impl Tour {
             }
         }
 
-        Tour { nodes, path, primes, inv, per_nodes_edges, cur_len, prefix_lens, prefix_lens_offset, prefix_lens_offset_rev, cur_real_len }
+        let mut hash = DefaultHasher::new();
+        big_lens.hash(&mut hash);
+        let penalty_hash = hash.finish() as usize;
+        //  println!("big lens {} {}", big_lens.len(), penalty_hash);
+        let big_lens_count = big_lens.len();
+
+        Tour { nodes, path, primes, inv, per_nodes_edges, cur_len, prefix_lens, prefix_lens_offset, prefix_lens_offset_rev, cur_real_len, penalty_hash, big_lens_count }
     }
 
     pub fn penalties(&self) -> Vec<(usize, usize, f64)> {

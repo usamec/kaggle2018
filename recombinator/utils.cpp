@@ -13,6 +13,7 @@ char is_prime[N];
 double x[N];
 double y[N];
 double penalty = 0.1;
+double penalty_threshold = 0.0;
 
 int check_prime(int i) {
   if (i < 2) return false;
@@ -76,6 +77,10 @@ double distance(int i, int j) {
   return sqrt(xx + yy);
 }
 
+double sigmoid(double x) {
+    return 1.0 / (1.0 + exp(-x));
+}
+
 // shift = index of first vertex
 double eval(const vector<int>& path, int shift) {
   double total = 0;
@@ -83,7 +88,11 @@ double eval(const vector<int>& path, int shift) {
     double d = distance(path[i], path[i+1]);
     if ((i + 1 + shift) % 10 == 0
         && !is_prime[path[i]]) {
-      d *= 1 + penalty;
+      double dp = d * penalty;
+      if (penalty_threshold > 0.0) {
+          dp *= sigmoid(((d / (penalty_threshold + 1e-10)) - 1.0) * 5.0);
+      }
+      d += dp;
     }
     total += d;
   }

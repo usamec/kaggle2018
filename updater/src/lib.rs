@@ -22,10 +22,11 @@ pub struct PenaltyConfig {
     pub base_penalty: f64,
     // (edge_length, edge_id) -> (0.0,1.0)
     // if not defined assumes |_,_| 1.0
-    pub penalty_lambda: Option<Box<Fn(f64, usize) -> f64>>
+    pub penalty_lambda: Option<Box<Fn(f64, usize) -> f64>>,
+    pub penalty_threshold: f64,
 }
 
-pub static mut penalty_config: PenaltyConfig = PenaltyConfig { base_penalty: 0.1, penalty_lambda: None };
+pub static mut penalty_config: PenaltyConfig = PenaltyConfig { base_penalty: 0.1, penalty_lambda: None, penalty_threshold: 0.0 };
 
 pub fn load_poses() -> Vec<(f64,f64)> {
     let f = File::open("../inputs/cities.csv").expect("file not found");
@@ -39,8 +40,8 @@ pub fn load_poses() -> Vec<(f64,f64)> {
     out
 }
 
-pub fn load_candidates2(cand_limit: usize) -> Vec<Vec<usize>> {
-    let f = File::open("../inputs/cities.cand").expect("file not found");
+pub fn load_candidates2(cand_limit: usize, cand_file: &str) -> Vec<Vec<usize>> {
+    let f = File::open(cand_file).expect("file not found");
     let file = BufReader::new(&f);
     let mut out: Vec<Vec<usize,>> = Vec::new();
     for line in file.lines().skip(1) {

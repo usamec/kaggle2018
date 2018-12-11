@@ -19,9 +19,11 @@ use std::io::Write;
 use std::io::stdout;
 use std::iter;
 use std::time;
+use std::borrow::BorrowMut;
 use std::fs;
 use chrono::Local;
 use std::process::Command;
+use std::cell::RefCell;
 
 /// The logistic aka sigmoid function.
 #[inline]
@@ -37,11 +39,14 @@ fn merge(a: &Tour, b: &Tour, prefix: &str) -> Tour {
     let cur_pen = unsafe {
         format!("{}", penalty_config.base_penalty)
     };
+    let cur_thres = unsafe {
+        format!("{}", penalty_config.penalty_threshold)
+    };
 
     a.save(&f1);
     b.save(&f2);
 
-    Command::new("./recombinator").arg(&f1).arg(&f2).arg(&f3).arg(&cur_pen).status().expect("recomb failed");
+    Command::new("./recombinator").arg(&f1).arg(&f2).arg(&f3).arg(&cur_pen).arg(&cur_thres).status().expect("recomb failed");
 
     a.make_new(load_tour(&f3))
 }
@@ -52,6 +57,7 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> O
     let mut cur_tour = tour.clone();
 
     let mut cc = 0;
+    let mut cand_buf = Vec::new();
     loop {
         let start_path_pos = rng.gen_range(1, cur_tour.get_path().len() - 1);
         let start_vertex = cur_tour.get_path()[start_path_pos];
@@ -65,15 +71,31 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> O
         let mut removed_sum = dist(cur_tour.nodes[start_vertex], cur_tour.nodes[start_vertex2]);
         let mut added_sum = 0.0;
         let mut good = true;
-        for i in 0..*[1, 2].choose(&mut rng).unwrap() {
+        for i in 0..8 {
             let mut next_vertex = 0;
+            cand_buf.clear();
+            cand_buf.extend(candidates[current_vertex].iter().filter(|&&(c, d)| d <= removed_sum - added_sum + 5.0).map(|&x| x.0));
             for _ in 0..100 {
-                next_vertex = candidates[current_vertex].choose_weighted(&mut rng, |x| x.1).unwrap().0;
+                let maybe_next_vertex = cand_buf.choose(&mut rng);
+                /*let maybe_next_vertex = candidates[current_vertex]
+                    .choose_weighted(&mut rng, |x| {
+                        if x.1 > removed_sum - added_sum + base_limit {
+                            0.0
+                        } else {
+                            //let gain = tour.largest_dist_to_neigh(x.0) - x.1;
+                            //(5.0 + gain).max(1.0)
+                            //(gain / 10.0).exp()
+                            1.0
+                        }
+                    });*/
+
+                if maybe_next_vertex.is_none() {
+                    break;
+                }
+                next_vertex = *maybe_next_vertex.unwrap();
                 if next_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
-                    !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)) {
-                    /*if i != 0 || (cur_tour.get_inv()[current_vertex] as i32 - cur_tour.get_inv()[next_vertex] as i32).abs() > 100*/ {
-                        break;
-                    }
+                    !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)){
+                    break;
                 }
                 next_vertex = 0;
             }
@@ -84,10 +106,10 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> O
             added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[next_vertex]);
             added.push((current_vertex, next_vertex));
 
-            /*if added_sum - removed_sum > 10.0 {
+            if added_sum - removed_sum > 5.0 {
                 good = false;
                 break;
-            }*/
+            }
 
 
             current_vertex = 0;
@@ -114,7 +136,7 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> O
         added.push((current_vertex, start_vertex2));
         added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[start_vertex2]);
 
-        if added_sum - removed_sum > 10.0 {
+        if added_sum - removed_sum > 5.0 {
             continue;
         }
 
@@ -133,7 +155,7 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> O
             cur_tour = cur_tour.make_new(cur_tour_path);
             cc += 1;
             println!("boo {}", cc);
-            if cc == 10 {
+            if cc == 30 {
                 break;
             }
         }
@@ -156,7 +178,7 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> O
                 if new_tour.get_len() < actual_len {
                     actual_len = new_tour.get_len();
                     actual_real_len = new_tour.get_real_len();
-                    println!("bet {} {}", actual_len, start_len);
+                    println!("bet {} {} {}", actual_len, start_len, i - last);
                     last = i;
                     cur_tour = new_tour;
                     fouls = 0;
@@ -169,6 +191,9 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> O
             }
         }
         if i - last > 1_000_000 {
+            break;
+        }
+        if actual_len < start_len {
             break;
         }
     }
@@ -199,6 +224,7 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> 
     let mut cur_tour = tour.clone();
 
     let mut cc = 0;
+    let mut cand_buf = Vec::new();
     loop {
         let start_path_pos = rng.gen_range(1, cur_tour.get_path().len() - 1);
         let start_vertex = cur_tour.get_path()[start_path_pos];
@@ -212,15 +238,31 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> 
         let mut removed_sum = dist(cur_tour.nodes[start_vertex], cur_tour.nodes[start_vertex2]);
         let mut added_sum = 0.0;
         let mut good = true;
-        for i in 0..7 {
+        for i in 0..8 {
             let mut next_vertex = 0;
+            cand_buf.clear();
+            cand_buf.extend(candidates[current_vertex].iter().filter(|&&(c, d)| d <= removed_sum - added_sum + 5.0).map(|&x| x.0));
             for _ in 0..100 {
-                next_vertex = candidates[current_vertex].choose_weighted(&mut rng, |x| x.1).unwrap().0;
+                let maybe_next_vertex = cand_buf.choose(&mut rng);
+                /*let maybe_next_vertex = candidates[current_vertex]
+                    .choose_weighted(&mut rng, |x| {
+                        if x.1 > removed_sum - added_sum + base_limit {
+                            0.0
+                        } else {
+                            //let gain = tour.largest_dist_to_neigh(x.0) - x.1;
+                            //(5.0 + gain).max(1.0)
+                            //(gain / 10.0).exp()
+                            1.0
+                        }
+                    });*/
+
+                if maybe_next_vertex.is_none() {
+                    break;
+                }
+                next_vertex = *maybe_next_vertex.unwrap();
                 if next_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
-                    !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)) {
-                    /*if i != 0 || (cur_tour.get_inv()[current_vertex] as i32 - cur_tour.get_inv()[next_vertex] as i32).abs() > 100*/ {
-                        break;
-                    }
+                    !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)){
+                    break;
                 }
                 next_vertex = 0;
             }
@@ -231,7 +273,7 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> 
             added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[next_vertex]);
             added.push((current_vertex, next_vertex));
 
-            if added_sum - removed_sum > 10.0 {
+            if added_sum - removed_sum > 5.0 {
                 good = false;
                 break;
             }
@@ -261,7 +303,7 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> 
         added.push((current_vertex, start_vertex2));
         added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[start_vertex2]);
 
-        if added_sum - removed_sum > 10.0 {
+        if added_sum - removed_sum > 5.0 {
             continue;
         }
 
@@ -275,12 +317,12 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> 
         let start_len = cur_tour.get_len();
         println!("test {} {}", actual_len, start_len);
 
-        if actual_len < start_len + 20.0 {
+        if actual_len < start_len + 10.0 {
             let (_, cur_tour_path) = cur_tour.test_changes(&added, &removed).unwrap();
             cur_tour = cur_tour.make_new(cur_tour_path);
             cc += 1;
             println!("boo {}", cc);
-            if cc == 10 {
+            if cc == 30 {
                 break;
             }
         }
@@ -303,7 +345,7 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> 
                 if new_tour.get_len() < actual_len {
                     actual_len = new_tour.get_len();
                     actual_real_len = new_tour.get_real_len();
-                    println!("bet {} {}", actual_len, start_len);
+                    println!("bet {} {} {}", actual_len, start_len, i - last);
                     last = i;
                     cur_tour = new_tour;
                     fouls = 0;
@@ -315,7 +357,10 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> 
                 }
             }
         }
-        if i - last > 1_000_000 {
+        if i - last > 2_000_000 {
+            break;
+        }
+        if actual_len < start_len {
             break;
         }
     }
@@ -341,29 +386,6 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> 
 }
 
 fn patch3(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>, mut all_cycle_parts: Vec<Vec<(usize, usize)>>, mut added_sum: f64, mut removed_sum: f64) -> Option<(Tour, f64)> {
-    //println!("{:?}", all_cycle_parts);
-
-    /*let mut cycle_parts_iter = all_cycle_parts.into_iter();
-    let mut cycle_parts1 = cycle_parts_iter.next().unwrap();
-
-    cycle_parts1.iter_mut().for_each(|p| {
-        *p = (p.0.min(p.1), p.0.max(p.1))
-    });
-
-    let mut cycle_parts2 = cycle_parts_iter.next().unwrap();
-
-    cycle_parts2.iter_mut().for_each(|p| {
-        *p = (p.0.min(p.1), p.0.max(p.1))
-    });
-
-    if cycle_parts1.iter().all(|x| x.1 - x.0 < 3) {
-        return None;
-    }
-
-    if cycle_parts2.iter().all(|x| x.1 - x.0 < 3) {
-        return None;
-    }*/
-
     let cycle_parts = all_cycle_parts.choose(&mut rand::thread_rng()).unwrap();
 
     for &cp in cycle_parts {
@@ -408,6 +430,11 @@ fn patch3(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                             let (cycles, cycle_parts) = tour.count_cycles(&added, &removed);
                             if cycles == 2 {
                                 if let Some(r) = patch(tour, candidates, temp, base_limit, log_prefix, added, removed, cand_buf, cycle_parts, added_sum, removed_sum) {
+                                    //panic!("bu");
+                                    return Some(r);
+                                }
+                            } else if cycles < all_cycle_parts.len() {
+                                if let Some(r) = patch3(tour, candidates, temp, base_limit, log_prefix, added, removed, cand_buf, cycle_parts, added_sum, removed_sum) {
                                     //panic!("bu");
                                     return Some(r);
                                 }
@@ -516,11 +543,27 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limi
     None
 }
 
+thread_local!(static opt_start_v: RefCell<usize> = RefCell::new(1));
+
 fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>) -> Option<(Tour, f64)> {
     let mut rng = rand::thread_rng();
-    let start_path_pos = rng.gen_range(1, tour.get_path().len() - 1);
+    /*let start_path_pos = rng.gen_range(1, tour.get_path().len() - 1);*/
+    let start_path_pos: usize = opt_start_v.with(|sv| {
+        *sv.borrow()
+    });
     let start_vertex = tour.get_path()[start_path_pos];
-    let start_vertex2 = tour.get_path()[start_path_pos + 1];
+    let start_vertex2 = tour.get_path()[(start_path_pos) + 1];
+    opt_start_v.with(|sv| {
+        let mut start_pos = sv.borrow_mut();
+        *start_pos += 1;
+        if *start_pos == tour.get_path().len() - 1 {
+            *start_pos = 1;
+        }
+    });
+
+
+
+
 
     added.clear();
     removed.clear();
@@ -660,9 +703,9 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                     if cycles > left + 1 && cycles < 1_000_000 {
                         good = false;
                     }
-                    if added.len() % 6 == 0 && cycles != 1 {
+                    /*if added.len() % 6 == 0 && cycles != 1 {
                         good = false;
-                    }
+                    }*/
 
                     if cycles == 2 {
                         removed_sum += dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
@@ -673,6 +716,14 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
                         added_sum -= dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
                         removed_sum -= dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
                     } else if cycles == 3 && rand::thread_rng().gen_range(0, 10) == 0 {
+                        removed_sum += dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
+                        added_sum += dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
+                        if let Some(r) = patch3(tour, candidates, temp, base_limit, log_prefix, added, removed, cand_buf, cycle_parts, added_sum, removed_sum) {
+                            return Some(r);
+                        }
+                        added_sum -= dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
+                        removed_sum -= dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
+                    } else if cycles >= 4 && cycles <= 10 && rand::thread_rng().gen_range(0, 10) == 0 {
                         removed_sum += dist(tour.nodes[current_vertex], tour.nodes[next_vertex]);
                         added_sum += dist(tour.nodes[current_vertex], tour.nodes[start_vertex2]);
                         if let Some(r) = patch3(tour, candidates, temp, base_limit, log_prefix, added, removed, cand_buf, cycle_parts, added_sum, removed_sum) {
@@ -802,7 +853,10 @@ struct Config {
     base_limit: f64,
 
     #[structopt(short = "st", long = "timestamp")]
-    save_timestamp: bool
+    save_timestamp: bool,
+
+    #[structopt(short = "cf", long = "cand-file", default_value = "../inputs/cities.cand")]
+    cand_file: String
 }
 
 fn main() {
@@ -812,6 +866,7 @@ fn main() {
 
     unsafe {
         penalty_config.base_penalty = opt.penalty;
+        penalty_config.penalty_threshold = opt.penalty_threshold;
 
         if opt.penalty_threshold > 0.0 {
             let threshold = opt.penalty_threshold;
@@ -829,7 +884,7 @@ fn main() {
     let primes = Arc::new(get_primes(nodes.len()));
     let tour = Arc::new(Mutex::new(Tour::new(load_tour(&opt.load_from), nodes.clone(), primes.clone())));
     //let candidates = load_candidates(opt.cand_limit);
-    let candidates = load_candidates2(opt.cand_limit);
+    let candidates = load_candidates2(opt.cand_limit, &opt.cand_file);
     let candidates_w = candidates.iter().enumerate().map(|(i, cc)| {
         cc.iter().enumerate().map(|(j, &c)| {
             let d = dist(nodes[i], nodes[c]);
@@ -855,17 +910,18 @@ fn main() {
         let our_candidates = candidates_w.clone();
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
         let handle = thread::spawn(move || {
+            //thread::sleep(time::Duration::new(180, 0));
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour_base) = do_opt2(&mut our_tour, &our_candidates, &prefix) {
+                if let Some(new_tour_base) = do_opt2b(&mut our_tour, &our_candidates, &prefix) {
                     //println!("new len {}", new_tour.get_len());
                     {
                         let main_tour = main_tour_mutex.lock().unwrap().clone();
 
                         let new_tour = merge(&new_tour_base, &main_tour, &prefix);
-                        if new_tour.get_len() < main_tour.get_len() {
+                        if new_tour.get_len() < main_tour_mutex.lock().unwrap().get_len() {
                             println!("acceptxa {} real {} {}", new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
                             our_tour = new_tour;
                             our_tour_hash = our_tour.hash();
@@ -900,17 +956,18 @@ fn main() {
         let our_candidates = candidates_w.clone();
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
         let handle = thread::spawn(move || {
+            //thread::sleep(time::Duration::new(180, 0));
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour_base) = do_opt2b(&mut our_tour, &our_candidates, &prefix) {
+                if let Some(new_tour_base) = do_opt2(&mut our_tour, &our_candidates, &prefix) {
                     //println!("new len {}", new_tour.get_len());
                     {
                         let main_tour = main_tour_mutex.lock().unwrap().clone();
 
                         let new_tour = merge(&new_tour_base, &main_tour, &prefix);
-                        if new_tour.get_len() < main_tour.get_len() {
+                        if new_tour.get_len() <  main_tour_mutex.lock().unwrap().get_len() {
                             println!("acceptxb {} real {} {}", new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
                             our_tour = new_tour;
                             our_tour_hash = our_tour.hash();
@@ -968,8 +1025,8 @@ fn main() {
                     //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
                 }
                 cc += 1;
-                if cc % 1000000 == 0 {
-                    println!("cc {} {}", cc, thread_id);
+                if cc % 100000 == 0 {
+                    println!("cc {} {} {}", cc, thread_id, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                 }
                 if main_tour_hash.load(Ordering::Relaxed) != our_tour_hash {
                     println!("reload {} {}", thread_id, cc);
