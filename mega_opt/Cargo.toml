@@ -1,0 +1,15 @@
+[package]
+name = "mega_opt"
+version = "0.1.0"
+authors = ["Vlado Boza <vlado.boza@ceai.io>"]
+
+[dependencies]
+csv = "1"
+rand = "0.6"
+assert_approx_eq = "1.0.0"
+structopt = "0.2"
+rayon = "1.0"
+chrono = "0.4.6"
+
+[profile.release]
+lto = true
