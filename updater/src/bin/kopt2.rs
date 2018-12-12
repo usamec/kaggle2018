@@ -51,7 +51,174 @@ fn merge(a: &Tour, b: &Tour, prefix: &str) -> Tour {
     a.make_new(load_tour(&f3))
 }
 
-fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> Option<Tour> {
+fn do_opt2weak(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> Option<Tour> {
+    let mut rng = rand::thread_rng();
+
+    let mut cur_tour = tour.clone();
+
+    let mut cc = 0;
+    let mut cand_buf = Vec::new();
+    loop {
+        let start_path_pos = rng.gen_range(1, cur_tour.get_path().len() - 1);
+        let start_vertex = cur_tour.get_path()[start_path_pos];
+        let start_vertex2 = cur_tour.get_path()[start_path_pos + 1];
+
+        let mut removed = Vec::new();
+        removed.push((start_vertex, start_vertex2));
+        let mut added = Vec::new();
+
+        let mut current_vertex = start_vertex;
+        let mut removed_sum = dist(cur_tour.nodes[start_vertex], cur_tour.nodes[start_vertex2]);
+        let mut added_sum = 0.0;
+        let mut good = true;
+        for i in 0..8 {
+            let mut next_vertex = 0;
+            cand_buf.clear();
+            cand_buf.extend(candidates[current_vertex].iter().filter(|&&(c, d)| d <= removed_sum - added_sum + 5.0).map(|&x| x.0));
+            for _ in 0..100 {
+                let maybe_next_vertex = cand_buf.choose(&mut rng);
+                /*let maybe_next_vertex = candidates[current_vertex]
+                    .choose_weighted(&mut rng, |x| {
+                        if x.1 > removed_sum - added_sum + base_limit {
+                            0.0
+                        } else {
+                            //let gain = tour.largest_dist_to_neigh(x.0) - x.1;
+                            //(5.0 + gain).max(1.0)
+                            //(gain / 10.0).exp()
+                            1.0
+                        }
+                    });*/
+
+                if maybe_next_vertex.is_none() {
+                    break;
+                }
+                next_vertex = *maybe_next_vertex.unwrap();
+                if next_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
+                    !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)){
+                    break;
+                }
+                next_vertex = 0;
+            }
+            if next_vertex == 0 {
+                good = false;
+                break;
+            }
+            added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[next_vertex]);
+            added.push((current_vertex, next_vertex));
+
+            if added_sum - removed_sum > 5.0 {
+                good = false;
+                break;
+            }
+
+
+            current_vertex = 0;
+            for _ in 0..100 {
+                current_vertex = cur_tour.rand_neighbour(next_vertex);
+                if current_vertex != 0 && !removed.contains(&(current_vertex, next_vertex)) && !removed.contains(&(next_vertex, current_vertex)) &&
+                    !added.contains(&(current_vertex, next_vertex)) && !added.contains(&(next_vertex, current_vertex)) {
+                    break;
+                }
+                current_vertex = 0;
+            }
+            if current_vertex == 0 {
+                good = false;
+                break;
+            }
+
+            removed_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[next_vertex]);
+            removed.push((next_vertex, current_vertex));
+        }
+        if !good {
+            continue;
+        }
+
+        added.push((current_vertex, start_vertex2));
+        added_sum += dist(cur_tour.nodes[current_vertex], cur_tour.nodes[start_vertex2]);
+
+        if added_sum - removed_sum > 5.0 {
+            continue;
+        }
+
+
+        let test_fast = cur_tour.test_changes_fast(&added, &removed);
+        if test_fast.is_none() {
+            continue;
+        }
+
+        let mut actual_len = test_fast.unwrap();
+        let start_len = cur_tour.get_len();
+        println!("test {} {}", actual_len, start_len);
+
+        if actual_len < start_len + 10.0 {
+            let (_, cur_tour_path) = cur_tour.test_changes(&added, &removed).unwrap();
+            cur_tour = cur_tour.make_new(cur_tour_path);
+            cc += 1;
+            println!("boo {}", cc);
+            if cc == 5 {
+                break;
+            }
+        }
+    }
+    let start_len = tour.get_len();
+    let mut actual_len = cur_tour.get_len();
+    let mut actual_real_len = cur_tour.get_real_len();
+
+    println!("go {} {} ", start_len, actual_len);
+
+
+    let mut last = 0;
+    let mut fouls = 0;
+    let mut added_v = vec!();
+    let mut removed_v = vec!();
+    let mut cand_buf = vec!();
+    for i in 0..1_000_000_000 {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, 3.0, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf) {
+            if new_tour.get_path() != tour.get_path() {
+                if new_tour.get_len() < actual_len {
+                    actual_len = new_tour.get_len();
+                    actual_real_len = new_tour.get_real_len();
+                    println!("bet {} {} {}", actual_len, start_len, i - last);
+                    last = i;
+                    cur_tour = new_tour;
+                    fouls = 0;
+                }
+            } else {
+                fouls += 1;
+                if fouls == 10 {
+                    break;
+                }
+            }
+        }
+        if i - last > 500_000 {
+            break;
+        }
+        if actual_len < start_len {
+            break;
+        }
+    }
+
+    let f1 = format!("{}-1.csv", prefix);
+    let f2 = format!("{}-2.csv", prefix);
+    let f3 = format!("{}-3.csv", prefix);
+    let cur_pen = unsafe {
+        format!("{}", penalty_config.base_penalty)
+    };
+
+    cur_tour = merge(&cur_tour, &tour, prefix);
+    actual_len = cur_tour.get_len();
+
+    println!("after merge {} {}", actual_len, start_len);
+
+    if actual_len < start_len {
+        stdout().flush();
+        Some(cur_tour)
+    } else {
+        None
+    }
+}
+
+fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, base_limit: f64) -> Option<Tour> {
     let mut rng = rand::thread_rng();
 
     let mut cur_tour = tour.clone();
@@ -173,7 +340,7 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> O
     let mut removed_v = vec!();
     let mut cand_buf = vec!();
     for i in 0..1_000_000_000 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, 3.0, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf) {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf) {
             if new_tour.get_path() != tour.get_path() {
                 if new_tour.get_len() < actual_len {
                     actual_len = new_tour.get_len();
@@ -218,7 +385,145 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> O
     }
 }
 
-fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> Option<Tour> {
+fn do_opt2x(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> Option<Tour> {
+    let mut rng = rand::thread_rng();
+
+    let mut cur_tour = tour.clone();
+
+    let mut cc = 0;
+    let mut mark = 0;
+    let mut mark_end = 0;
+
+    loop {
+        let k = rng.gen_range(20, 50);
+        let p = rng.gen_range(10, tour.get_path().len() - 2 - k);
+        let cur_len = tour.get_dist_offset(p, p+k, p);
+        let mut good_offset = 1_000_000;
+        for offset in 0..10 {
+            if offset == p % 10 {
+                continue;
+            }
+            let new_len = tour.get_dist_offset(p, p+k, offset);
+            if new_len < cur_len - 2.0 {
+                println!("found shift {} {} {}", cur_len, new_len, offset);
+                good_offset = offset;
+                break;
+            } else {
+
+            }
+        }
+        if good_offset == 1_000_000 {
+            continue;
+        }
+        let shift = (10 + p - good_offset) % 10;
+        let mut found = false;
+
+        for j in p+k+1..tour.get_path().len() - 3 {
+            let node = tour.get_path()[j];
+            let prev_node = tour.get_path()[j-1];
+
+            for &(c, _) in &candidates[prev_node] {
+
+                let inv_pos = tour.get_inv()[c];
+
+                if inv_pos > p - shift {
+                    continue;
+                }
+
+                let inv_pos_b = inv_pos + shift;
+                let c2 = tour.get_path()[inv_pos_b];
+
+                if dist(tour.nodes[node], tour.nodes[c2]) + dist(tour.nodes[prev_node], tour.nodes[c]) < dist(tour.nodes[node], tour.nodes[prev_node])*2.0 {
+                    let mut new_path = Vec::new();
+                    new_path.extend(tour.get_path()[..inv_pos].iter());
+                    new_path.extend(tour.get_path()[inv_pos_b..j].iter());
+                    new_path.extend(tour.get_path()[inv_pos..inv_pos_b].iter());
+                    new_path.extend(tour.get_path()[j..].iter());
+                    cur_tour = tour.make_new(new_path);
+                    mark = tour.get_path()[p];
+                    mark_end = tour.get_path()[p+k-1];
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (found) {
+            break;
+        }
+
+        /*let mut new_path = Vec::new();
+        new_path.extend(tour.get_path()[..p-shift].iter());
+        new_path.extend(tour.get_path()[p..p+k].iter());
+        new_path.extend(tour.get_path()[p-shift..p].iter());
+        new_path.extend(tour.get_path()[p+k..].iter());
+        cur_tour = tour.make_new(new_path);
+        mark = tour.get_path()[p];
+        mark_end = tour.get_path()[p+k-1];
+        break;*/
+    }
+
+    let mark_start_pos = cur_tour.get_inv()[mark];
+    let mark_end_pos = cur_tour.get_inv()[mark_end];
+
+    let start_len = tour.get_len();
+    let mut actual_len = cur_tour.get_len();
+    let mut actual_real_len = cur_tour.get_real_len();
+
+    println!("go {} {} ", start_len, actual_len);
+
+
+    let mut last = 0;
+    let mut fouls = 0;
+    let mut added_v = vec!();
+    let mut removed_v = vec!();
+    let mut cand_buf = vec!();
+    for i in 0..1_000_000_000 {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, 3.0, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf) {
+            if new_tour.get_path() != tour.get_path() {
+                if new_tour.get_len() < actual_len && new_tour.get_inv()[mark] % 10 == mark_start_pos % 10  && new_tour.get_inv()[mark_end] % 10 == mark_end_pos % 10 {
+                    actual_len = new_tour.get_len();
+                    actual_real_len = new_tour.get_real_len();
+                    println!("bet {} {} {} marks {} {} marke {} {}", actual_len, start_len, i - last, mark_start_pos % 10, new_tour.get_inv()[mark] % 10, mark_end_pos % 10, new_tour.get_inv()[mark_end] % 10);
+                    last = i;
+                    cur_tour = new_tour;
+                    fouls = 0;
+                }
+            } else {
+                fouls += 1;
+                if fouls == 10 {
+                    break;
+                }
+            }
+        }
+        if i - last > 2_000_000 {
+            break;
+        }
+        if actual_len < start_len {
+            break;
+        }
+    }
+
+    let f1 = format!("{}-1.csv", prefix);
+    let f2 = format!("{}-2.csv", prefix);
+    let f3 = format!("{}-3.csv", prefix);
+    let cur_pen = unsafe {
+        format!("{}", penalty_config.base_penalty)
+    };
+
+    cur_tour = merge(&cur_tour, &tour, prefix);
+    actual_len = cur_tour.get_len();
+
+    println!("after merge {} {}", actual_len, start_len);
+
+    if actual_len < start_len {
+        stdout().flush();
+        Some(cur_tour)
+    } else {
+        None
+    }
+}
+
+fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, base_limit: f64) -> Option<Tour> {
     let mut rng = rand::thread_rng();
 
     let mut cur_tour = tour.clone();
@@ -340,7 +645,7 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str) -> 
     let mut removed_v = vec!();
     let mut cand_buf = vec!();
     for i in 0..1_000_000_000 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, 3.0, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf) {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf) {
             if new_tour.get_path() != tour.get_path() {
                 if new_tour.get_len() < actual_len {
                     actual_len = new_tour.get_len();
@@ -517,11 +822,12 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_limi
                         if added_sum - removed_sum < base_limit {
                             let test_fast = tour.test_changes_fast(&added, &removed);
                             if let Some(len) = test_fast {
-                                if len < tour.get_len() {
+                                let pr = rand::thread_rng().gen::<f64>();
+                                if len < tour.get_len() || (temp > 0.0 && ((tour.get_len() - len) / temp).exp() > pr){
                                     let (res, p) = tour.test_changes(&added, &removed).unwrap();
                                     let new_tour = tour.make_new(p, );
                                     println!("{}accept nonseq {} real {}, added len {} a - r {} {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
-                                    return Some((new_tour, rand::thread_rng().gen::<f64>()));
+                                    return Some((new_tour, pr));
                                 }
                             }
                         }
@@ -834,6 +1140,9 @@ struct Config {
     #[structopt(short = "nh", long = "n-heavy-threads", default_value = "1")]
     n_heavy_threads: usize,
 
+    #[structopt(short = "nh", long = "n-weak-threads", default_value = "1")]
+    n_weak_threads: usize,
+
     #[structopt(short = "l", long = "load")]
     load_from: String,
 
@@ -909,13 +1218,14 @@ fn main() {
         let main_tour_hash = Arc::clone(&tour_hash);
         let our_candidates = candidates_w.clone();
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
+        let base_limit = opt.base_limit;
         let handle = thread::spawn(move || {
-            //thread::sleep(time::Duration::new(180, 0));
+            thread::sleep(time::Duration::new(180, 0));
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour_base) = do_opt2b(&mut our_tour, &our_candidates, &prefix) {
+                if let Some(new_tour_base) = do_opt2b(&mut our_tour, &our_candidates, &prefix, base_limit) {
                     //println!("new len {}", new_tour.get_len());
                     {
                         let main_tour = main_tour_mutex.lock().unwrap().clone();
@@ -955,20 +1265,21 @@ fn main() {
         let main_tour_hash = Arc::clone(&tour_hash);
         let our_candidates = candidates_w.clone();
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
+        let base_limit = opt.base_limit;
         let handle = thread::spawn(move || {
             //thread::sleep(time::Duration::new(180, 0));
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour_base) = do_opt2(&mut our_tour, &our_candidates, &prefix) {
+                if let Some(new_tour_base) = do_opt2(&mut our_tour, &our_candidates, &prefix, base_limit) {
                     //println!("new len {}", new_tour.get_len());
                     {
                         let main_tour = main_tour_mutex.lock().unwrap().clone();
 
                         let new_tour = merge(&new_tour_base, &main_tour, &prefix);
                         if new_tour.get_len() <  main_tour_mutex.lock().unwrap().get_len() {
-                            println!("acceptxb {} real {} {}", new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
+                            println!("acceptxx {} real {} {}", new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
                             our_tour = new_tour;
                             our_tour_hash = our_tour.hash();
 
@@ -1076,6 +1387,52 @@ fn main() {
                 cur_len = ccur_len;
                 cur_real_len = ccur_real_len;
                 println!("ccb {}", cc);
+            }
+        });
+        handles.push(handle);
+    }
+
+    for thread_id in opt.n_threads + opt.n_heavy_threads + opt.n_brute_threads..opt.n_threads + opt.n_heavy_threads + opt.n_brute_threads + opt.n_weak_threads {
+        let main_tour_mutex = Arc::clone(&tour);
+        let main_tour_hash = Arc::clone(&tour_hash);
+        let our_candidates = candidates_w.clone();
+        let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
+        let handle = thread::spawn(move || {
+            thread::sleep(time::Duration::new(90, 0));
+            let mut cc = 0;
+            let mut our_tour = main_tour_mutex.lock().unwrap().clone();
+            let mut our_tour_hash = our_tour.hash();
+            loop {
+                if let Some(new_tour_base) = do_opt2weak(&mut our_tour, &our_candidates, &prefix) {
+                    //println!("new len {}", new_tour.get_len());
+                    {
+                        let main_tour = main_tour_mutex.lock().unwrap().clone();
+
+                        let new_tour = merge(&new_tour_base, &main_tour, &prefix);
+                        if new_tour.get_len() <  main_tour_mutex.lock().unwrap().get_len() {
+                            println!("acceptxw {} real {} {}", new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
+                            our_tour = new_tour;
+                            our_tour_hash = our_tour.hash();
+
+
+                            let mut main_tour = main_tour_mutex.lock().unwrap();
+                            *main_tour = our_tour.clone();
+                            main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
+                        }
+                    }
+                    //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
+                }
+                cc += 1;
+                if cc % 1000000 == 0 {
+                    println!("cc {} {}", cc, thread_id);
+                }
+                if main_tour_hash.load(Ordering::Relaxed) != our_tour_hash {
+                    println!("reload {} {}", thread_id, cc);
+                    let main_tour = main_tour_mutex.lock().unwrap();
+                    our_tour = main_tour.clone();
+                    our_tour_hash = our_tour.hash();
+                }
+
             }
         });
         handles.push(handle);

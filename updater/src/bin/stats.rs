@@ -12,14 +12,17 @@ use structopt::StructOpt;
 #[structopt(name = "stars")]
 struct Config {
     #[structopt(short = "if", long = "input-file", default_value = "../outputs/workingx.csv")]
-    input_file: String
+    input_file: String,
+
+    #[structopt(short = "p", long = "penalty", default_value = "0.1")]
+    penalty: f64,
 }
 
 fn main() {
     let opt = Config::from_args();
 
     unsafe {
-        penalty_config.base_penalty = 0.1;
+        penalty_config.base_penalty = opt.penalty;
     }
 
     let nodes = load_poses();
