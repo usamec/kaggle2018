@@ -47,42 +47,27 @@ fn merge(a: &Tour, b: &Tour, prefix: &str, penalty_config: PenaltyConfig) -> Tou
     a.make_new(load_tour(&f3))
 }
 
-/*const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 6] = [
-    (1.0, 0.0, 0.0, 600000, 0.3, 0, 3),     // 0 x    18 24 30 36
+const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 6] = [
+    (0.1, 0.0, 0.0, 600000, 0.3, 0, 3),     // 0 x    18 24 30 36
 
-    (2.5, 0.0, 0.0, 600000, 0.0, 4, 0),    // 1 xx   19 25 31 37
+    (0.25, 0.0, 0.0, 600000, 0.0, 4, 0),    // 1 xx   19 25 31 37
 
-    (2.5, 0.0, 0.0, 600000, 0.0, 0, 3),    // 2      14 20 26 32
+    (0.25, 0.0, 0.0, 600000, 0.0, 0, 3),    // 2      14 20 26 32
 
-    (1.0, 0.01, 10.0, 400000, 0.0, 4, 0),   // 3      15 21 27 33
+    (0.1, 0.01, 10.0, 400000, 0.0, 4, 0),   // 3      15 21 27 33
 
-    (1.0, 0.01, 5.0, 600000, 0.0, 4, 0),    // 4      16 22 28 34
+    (0.1, 0.01, 5.0, 600000, 0.0, 4, 0),    // 4      16 22 28 34
 
-    (1.0, 0.01, 5.0, 800000, 0.0, 0, 3),    // 5 xx   17 23 29 35
-];*/
-
-const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 3] = [
-    (1.0, 0.0, 0.0, 600000, 0.3, 0, 3),     // 0 x    18 24 30 36
-    (1.0, 0.0, 0.0, 1200000, 0.3, 0, 3),     // 1 x    18 24 30 36
-
-/*    (2.5, 0.0, 0.0, 600000, 0.0, 4, 0),    // 1 xx   19 25 31 37
-
-    (2.5, 0.0, 0.0, 600000, 0.0, 0, 3),    // 2      14 20 26 32
-
-    (1.0, 0.01, 10.0, 400000, 0.0, 4, 0),   // 3      15 21 27 33
-
-    (1.0, 0.01, 5.0, 600000, 0.0, 4, 0),    // 4      16 22 28 34*/
-
-    (1.0, 0.01, 5.0, 800000, 0.0, 0, 3),    // 5 xx   17 23 29 35
+    (0.1, 0.01, 5.0, 800000, 0.0, 0, 3),    // 5 xx   17 23 29 35
 ];
 
 fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
-    let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id % 3];
+    let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id % 6];
 
     let mut rng = rand::thread_rng();
 
     //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty, length_slope: 0.01, length_min_slope: 10.0 });
-    let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * bp, length_slope: ls, length_min_slope: lms });
+    let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: bp, length_slope: ls, length_min_slope: lms });
 
     let mut cc = 0;
     let mut added_v = vec!();
@@ -108,7 +93,7 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, bas
     let mut actual_len = cur_tour.get_len();
     let mut actual_real_len = cur_tour.get_real_len();
 
-    println!("go {} {} {} ", thread_id % 3, start_len, actual_len);
+    println!("go {} {} {} ", thread_id, start_len, actual_len);
 
 
     let mut last = 0;
@@ -493,18 +478,6 @@ struct Config {
     #[structopt(short = "p", long = "penalty", default_value = "0.1")]
     penalty: f64,
 
-    #[structopt(short = "n", long = "n-threads", default_value = "2")]
-    n_threads: usize,
-
-    #[structopt(short = "nb", long = "n-brute-threads", default_value = "1")]
-    n_brute_threads: usize,
-
-    #[structopt(short = "nh", long = "n-heavy-threads", default_value = "1")]
-    n_heavy_threads: usize,
-
-    #[structopt(short = "nh", long = "n-weak-threads", default_value = "1")]
-    n_weak_threads: usize,
-
     #[structopt(short = "l", long = "load")]
     load_from: String,
 
@@ -533,7 +506,7 @@ fn main() {
     penalty_config.base_penalty = opt.penalty;
 
     let primes = Arc::new(get_primes(nodes.len()));
-    let tour = Arc::new(Mutex::new(Tour::new(load_tour(&opt.load_from), nodes.clone(), primes.clone(), penalty_config)));
+    let mut tour =Tour::new(load_tour(&opt.load_from), nodes.clone(), primes.clone(), penalty_config);
     //let candidates = load_candidates(opt.cand_limit);
     let candidates = load_candidates2(opt.cand_limit, &opt.cand_file);
     let candidates_w = candidates.iter().enumerate().map(|(i, cc)| {
@@ -545,197 +518,29 @@ fn main() {
     }).collect::<Vec<_>>();
 
     //let candidates_w = load_candidates2(opt.cand_limit);
-    println!("Hello, world! {:?} {:?} {:?}", nodes.len(), tour.lock().unwrap().get_path().len(), candidates_w.len());
+    println!("Hello, world! {:?} {:?} {:?}", nodes.len(), tour.get_path().len(), candidates_w.len());
     println!("{:?}", &primes[..20]);
-    println!("{:?}", verify_and_calculate_len(&nodes, &tour.lock().unwrap().get_path(), &primes, penalty_config));
-    println!("{:?}", tour.lock().unwrap().check_nodes_edges().unwrap().0);
-
-    let tour_hash = Arc::new(AtomicUsize::new(tour.lock().unwrap().hash()));
-
-    let mut handles = vec![];
-    let temp = opt.temp;
-    println!("temp {}", temp);
-    for thread_id in 0..opt.n_heavy_threads {
-        let main_tour_mutex = Arc::clone(&tour);
-        let main_tour_hash = Arc::clone(&tour_hash);
-        let our_candidates = candidates_w.clone();
-        let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
-        let base_limit = opt.base_limit;
-        let handle = thread::spawn(move || {
-            /*thread::sleep(time::Duration::new(180, 0));*/
-            let mut cc = 0;
-            let mut our_tour = main_tour_mutex.lock().unwrap().clone();
-            let mut our_tour_hash = our_tour.hash();
-            loop {
-                if let Some(new_tour_base) = do_opt2b(&mut our_tour, &our_candidates, &prefix, base_limit) {
-                    //println!("new len {}", new_tour.get_len());
-                    {
-                        let main_tour = main_tour_mutex.lock().unwrap().clone();
-
-                        let new_tour = merge(&new_tour_base, &main_tour, &prefix, main_tour.get_penalty_config());
-                        if new_tour.get_len() < main_tour_mutex.lock().unwrap().get_len() {
-                            println!("acceptxa {} real {} {}", new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
-                            our_tour = new_tour;
-                            our_tour_hash = our_tour.hash();
+    println!("{:?}", verify_and_calculate_len(&nodes, &tour.get_path(), &primes, penalty_config));
+    println!("{:?}", tour.check_nodes_edges().unwrap().0);
 
 
-                            let mut main_tour = main_tour_mutex.lock().unwrap();
-                            *main_tour = our_tour.clone();
-                            main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
-                        }
-                    }
-                    //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
-                }
-                cc += 1;
-                if cc % 1000000 == 0 {
-                    println!("cc {} {}", cc, thread_id);
-                }
-                if main_tour_hash.load(Ordering::Relaxed) != our_tour_hash {
-                    println!("reload {} {}", thread_id, cc);
-                    let main_tour = main_tour_mutex.lock().unwrap();
-                    our_tour = main_tour.clone();
-                    our_tour_hash = our_tour.hash();
-                }
+    let mut cc = 0;
+    let mut moves = 0;
+    let mut added_v = vec!();
+    let mut removed_v = vec!();
+    let mut cand_buf = vec!();
+    loop {
+        if let Some((new_tour, pr)) = do_opt(&mut tour, &candidates_w, opt.temp, opt.base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
+            tour = new_tour;
 
+            moves += 1;
+            if moves % 10 == 0 {
+                tour.save(&format!("{}-tmp.csv", opt.save_to));
             }
-        });
-        handles.push(handle);
-    }
-
-
-    for thread_id in opt.n_heavy_threads..opt.n_threads + opt.n_heavy_threads {
-        let main_tour_mutex = Arc::clone(&tour);
-        let main_tour_hash = Arc::clone(&tour_hash);
-        let our_candidates = candidates_w.clone();
-        let prefix = opt.save_to.clone();
-        let base_limit = opt.base_limit;
-        let handle = thread::spawn(move || {
-            let mut cc = 0;
-            let mut our_tour = main_tour_mutex.lock().unwrap().clone();
-            let mut our_tour_hash = our_tour.hash();
-            let mut added_v = vec!();
-            let mut removed_v = vec!();
-            let mut cand_buf = vec!();
-            loop {
-                if let Some((new_tour, pr)) = do_opt(&mut our_tour, &our_candidates, temp, base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
-                    {
-                        let mut main_tour = main_tour_mutex.lock().unwrap();
-                        if new_tour.get_len() < main_tour.get_len() || (temp > 0.0 && ((main_tour.get_len() - new_tour.get_len()) / temp).exp() > pr) {
-                            our_tour = new_tour;
-                            our_tour_hash = our_tour.hash();
-
-
-                            *main_tour = our_tour.clone();
-                            main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
-                        }
-                    }
-                    //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
-                }
-                cc += 1;
-                if cc % 100000 == 0 {
-                    println!("cc {} {} {}", cc, thread_id, Local::now().format("%Y-%m-%dT%H:%M:%S"));
-                }
-                if main_tour_hash.load(Ordering::Relaxed) != our_tour_hash {
-                    println!("reload {} {}", thread_id, cc);
-                    let main_tour = main_tour_mutex.lock().unwrap();
-                    our_tour = main_tour.clone();
-                    our_tour_hash = our_tour.hash();
-                }
-
-            }
-        });
-        handles.push(handle);
-    }
-
-    for thread_id in opt.n_threads + opt.n_heavy_threads..opt.n_threads + opt.n_heavy_threads + opt.n_weak_threads {
-        let main_tour_mutex = Arc::clone(&tour);
-        let main_tour_hash = Arc::clone(&tour_hash);
-        let our_candidates = candidates_w.clone();
-        let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
-        let base_limit = opt.base_limit;
-        let handle = thread::spawn(move || {
-            /*thread::sleep(time::Duration::new(90, 0));*/
-            let mut cc = 0;
-            let mut our_tour = main_tour_mutex.lock().unwrap().clone();
-            let mut our_tour_hash = our_tour.hash();
-            loop {
-                if let Some(new_tour_base) = do_opt2p(&mut our_tour, &our_candidates, &prefix, base_limit, thread_id) {
-                    //println!("new len {}", new_tour.get_len());
-                    {
-                        let main_tour = main_tour_mutex.lock().unwrap().clone();
-
-                        let new_tour = merge(&new_tour_base, &main_tour, &prefix, main_tour.get_penalty_config());
-                        if new_tour.get_len() <  main_tour_mutex.lock().unwrap().get_len() {
-                            println!("acceptxw {} {} real {} {}", thread_id % 3, new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
-                            our_tour = new_tour;
-                            our_tour_hash = our_tour.hash();
-
-
-                            let mut main_tour = main_tour_mutex.lock().unwrap();
-                            *main_tour = our_tour.clone();
-                            main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
-                        }
-                    }
-                    //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
-                }
-                cc += 1;
-                if cc % 1000000 == 0 {
-                    println!("cc {} {}", cc, thread_id);
-                }
-                if main_tour_hash.load(Ordering::Relaxed) != our_tour_hash {
-                    println!("reload {} {}", thread_id, cc);
-                    let main_tour = main_tour_mutex.lock().unwrap();
-                    our_tour = main_tour.clone();
-                    our_tour_hash = our_tour.hash();
-                }
-
-            }
-        });
-        handles.push(handle);
-    }
-
-    // writer thread
-    {
-        let save_timestamp = opt.save_timestamp;
-        let main_tour_mutex = Arc::clone(&tour);
-        let main_tour_hash = Arc::clone(&tour_hash);
-        let prefix = opt.save_to.clone();
-        let handle = thread::spawn(move || {
-            let mut our_tour_hash = main_tour_hash.load(Ordering::Relaxed);
-            let mut best_len = main_tour_mutex.lock().unwrap().get_len();
-            let mut best_real_len = main_tour_mutex.lock().unwrap().get_real_len();
-
-            loop {
-                let cur_hash = main_tour_hash.load(Ordering::Relaxed);
-                if cur_hash != our_tour_hash {
-                    println!("saving");
-                    let main_tour = main_tour_mutex.lock().unwrap().clone();
-                    main_tour.save(&format!("{}-tmp.csv", prefix));
-                    fs::rename(&format!("{}-tmp.csv", prefix), &format!("{}-latest.csv", prefix));
-                    if main_tour.get_len() < best_len {
-                        if save_timestamp {
-                            let date = Local::now();
-                            fs::copy(&format!("{}-latest.csv", prefix), &format!("{}-best-{}.csv", prefix, date.format("%Y-%m-%dT%H:%M:%S")));
-                        } else {
-                            fs::copy(&format!("{}-latest.csv", prefix), &format!("{}-best.csv", prefix));
-                        }
-                        best_len = main_tour.get_len();
-                    }
-
-                    if main_tour.get_real_len() < best_real_len {
-                        fs::copy(&format!("{}-latest.csv", prefix), &format!("{}-real-best.csv", prefix));
-                        best_real_len = main_tour.get_real_len();
-                    }
-
-                    our_tour_hash = cur_hash;
-                    println!("done saving");
-                }
-                thread::sleep(time::Duration::from_millis(1000));
-            }
-        });
-        handles.push(handle);
-    }
-    for handle in handles {
-        handle.join().unwrap();
+        }
+        cc += 1;
+        if cc % 100000 == 0 {
+            println!("cc {} {} {}", cc, 0, Local::now().format("%Y-%m-%dT%H:%M:%S"));
+        }
     }
 }

@@ -467,6 +467,10 @@ impl Tour {
         }
     }
 
+    /*pub fn apply_fast(self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> Tour {
+
+    }*/
+
     pub fn test_changes_fast(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> Option<f64> {
         if !Tour::check_duplicates(added, removed) {
 
