@@ -148,7 +148,7 @@ impl Tour {
         let mut prefix_lens_offset_rev = [vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0]];
         for i in 0..path.len()-1 {
             let current_len = dist(nodes[path[i]], nodes[path[i+1]]);
-            if current_len > 30.0 && i % 10 == 9 && !primes[i] {
+            if current_len > penalty_config.big_cutoff && i % 10 == 9 && !primes[i] {
                 big_lens.push((path[i], path[i+1]));
             }
             for j in 0..10 {

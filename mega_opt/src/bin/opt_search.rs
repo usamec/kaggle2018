@@ -5,11 +5,6 @@ extern crate structopt;
 extern crate chrono;
 
 use mega_opt::*;
-use std::rc::Rc;
-use std::fs::File;
-use std::io::BufReader;
-use std::io::BufRead;
-use rand::prelude::*;
 use std::collections::HashSet;
 use std::sync::{Mutex, Arc};
 use std::thread;
@@ -17,13 +12,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use structopt::StructOpt;
 use std::io::Write;
 use std::io::stdout;
-use std::iter;
 use std::time;
-use std::borrow::BorrowMut;
 use std::fs;
 use chrono::Local;
 use std::process::Command;
-use std::cell::RefCell;
 
 /// The logistic aka sigmoid function.
 #[inline]
@@ -89,13 +81,13 @@ const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 24] = [
     (0.1, 0.01, 5.0, 1200000, 0.0, 0, 3),   //23 x    y
 ];
 
-fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
+fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
     let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id];
 
     let mut rng = rand::thread_rng();
 
     //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty, length_slope: 0.01, length_min_slope: 10.0 });
-    let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: bp, length_slope: ls, length_min_slope: lms });
+    let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: bp, length_slope: ls, length_min_slope: lms, ..Default::default() });
 
     let mut cc = 0;
     let mut added_v = vec!();
@@ -105,7 +97,7 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, base
     let mut tabu = HashSet::new();
 
     for i in 0..iters {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, temp, base_limit, "heavy-start-", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), min_k) {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, pi,temp, base_limit, "heavy-start-", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), min_k) {
             {
                 added_v.iter().for_each(|&x| {
                     tabu.insert(x);
@@ -130,7 +122,7 @@ fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, base
     let mut found_opts = 0;
     let no_tabu = HashSet::new();
     for i in 0..1_000_000_000 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf, if found_opts >= tabus {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, pi,0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf, if found_opts >= tabus {
             &no_tabu
         } else {
             &tabu
@@ -217,6 +209,7 @@ fn main() {
     let opt = Config::from_args();
 
     let nodes = Arc::new(load_poses());
+    let pi = load_pi(nodes.len());
 
     let penalty_config = Default::default();
 
@@ -249,13 +242,14 @@ fn main() {
         let our_candidates = candidates_w.clone();
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
         let base_limit = opt.base_limit;
+        let our_pi = pi.clone();
         let handle = thread::spawn(move || {
             /*thread::sleep(time::Duration::new(180, 0));*/
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour_base) = do_opt2(&mut our_tour, &our_candidates, &prefix, base_limit, thread_id ) {
+                if let Some(new_tour_base) = do_opt2(&mut our_tour, &our_candidates, &our_pi, &prefix, base_limit, thread_id ) {
                     {
                         let main_tour = main_tour_mutex.lock().unwrap().clone();
 

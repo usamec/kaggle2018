@@ -57,6 +57,9 @@ fn main() {
     for i in 0..tour.len()-1 {
         writeln!(path_output, "{} {}", nodes[tour[i]].0, nodes[tour[i]].1);
         let current_len = dist(nodes[tour[i]], nodes[tour[i+1]]);
+        if current_len > 500.0 {
+            println!("very big len {} step {} nodes {} {}", current_len, i, tour[i], tour[i+1]);
+        }
         base_len += current_len;
         if (i + 1) % 10 == 0 {
             writeln!(tenth_output, "{} {}", nodes[tour[i]].0, nodes[tour[i]].1);

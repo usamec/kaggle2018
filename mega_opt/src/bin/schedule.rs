@@ -5,25 +5,10 @@ extern crate structopt;
 extern crate chrono;
 
 use mega_opt::*;
-use std::rc::Rc;
-use std::fs::File;
-use std::io::BufReader;
-use std::io::BufRead;
-use rand::prelude::*;
 use std::collections::HashSet;
-use std::sync::{Mutex, Arc};
-use std::thread;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc};
 use structopt::StructOpt;
-use std::io::Write;
-use std::io::stdout;
-use std::iter;
-use std::time;
-use std::borrow::BorrowMut;
-use std::fs;
 use chrono::Local;
-use std::process::Command;
-use std::cell::RefCell;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "kopt")]
@@ -58,6 +43,8 @@ fn main() {
 
     let nodes = Arc::new(load_poses());
 
+    let pi = load_pi(nodes.len());
+
     let mut penalty_config: PenaltyConfig = Default::default();
     penalty_config.base_penalty = opt.penalty;
 
@@ -90,7 +77,7 @@ fn main() {
         let mut cc = 0usize;
         let mut last = 0usize;
         loop {
-            if let Some((new_tour, pr)) = do_opt(&mut tour, &candidates_w, opt.temp, opt.base_limit, &format!("{}", pen_base), &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
+            if let Some((new_tour, pr)) = do_opt(&mut tour, &candidates_w, &pi, opt.temp, opt.base_limit, &format!("{}", pen_base), &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
                 tour = new_tour;
                 last = cc;
                 moves += 1;

@@ -76,13 +76,13 @@ const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 3] = [
     (1.0, 0.01, 5.0, 800000, 0.0, 0, 3),    // 5 xx   17 23 29 35
 ];
 
-fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
+fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
     let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id % 3];
 
     let mut rng = rand::thread_rng();
 
     //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty, length_slope: 0.01, length_min_slope: 10.0 });
-    let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * bp, length_slope: ls, length_min_slope: lms });
+    let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * bp, length_slope: ls, length_min_slope: lms, ..Default::default() });
 
     let mut cc = 0;
     let mut added_v = vec!();
@@ -92,7 +92,7 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, bas
     let mut tabu = HashSet::new();
 
     for i in 0..iters {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, temp, base_limit, "heavy-start-", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), min_k) {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, pi,temp, base_limit, "heavy-start-", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), min_k) {
             {
                 added_v.iter().for_each(|&x| {
                     tabu.insert(x);
@@ -117,7 +117,7 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, bas
     let mut found_opts = 0;
     let no_tabu = HashSet::new();
     for i in 0..1_000_000_000 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf, if found_opts >= tabus {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, pi,0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf, if found_opts >= tabus {
             &no_tabu
         } else {
             &tabu
@@ -160,171 +160,7 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, bas
     }
 }
 
-
-fn do_opt2c(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, base_limit: f64) -> Option<Tour> {
-    let mut rng = rand::thread_rng();
-
-    let mut cur_tour = tour.clone();
-
-    let mut cc = 0;
-    let mut added_v = vec!();
-    let mut removed_v = vec!();
-    let mut cand_buf = Vec::new();
-
-    let mut tabu = HashSet::new();
-
-    for i in 0..tour.get_path().len()*2 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.3, base_limit, "heavy-start-", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
-            /*if new_tour.get_len() < cur_tour.get_len()*/ {
-                added_v.iter().for_each(|&x| {
-                    tabu.insert(x);
-                });
-                cur_tour = new_tour;
-            }
-        }
-    }
-
-    cur_tour = cur_tour.change_penalty(tour.get_penalty_config());
-
-    let start_len = tour.get_len();
-    let mut actual_len = cur_tour.get_len();
-    let mut actual_real_len = cur_tour.get_real_len();
-
-    println!("go2c {} {} ", start_len, actual_len);
-
-
-    let mut last = 0;
-    let mut fouls = 0;
-    let mut cand_buf = vec!();
-    let mut found_opts = 0;
-    let no_tabu = HashSet::new();
-    for i in 0..1_000_000_000 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf, if found_opts >= 3 {
-            &no_tabu
-        } else {
-            &tabu
-        }, 0) {
-            if new_tour.get_path() != tour.get_path() {
-                if new_tour.get_len() < actual_len {
-                    found_opts += 1;
-                    actual_len = new_tour.get_len();
-                    actual_real_len = new_tour.get_real_len();
-                    println!("bet {} {} {}", actual_len, start_len, i - last);
-                    last = i;
-                    cur_tour = new_tour;
-                    fouls = 0;
-                }
-            } else {
-                fouls += 1;
-                if fouls == 10 {
-                    break;
-                }
-            }
-        }
-        if i - last > 2_000_000 {
-            break;
-        }
-        if actual_len < start_len {
-            break;
-        }
-    }
-
-    cur_tour = merge(&cur_tour, &tour, prefix, tour.get_penalty_config());
-    actual_len = cur_tour.get_len();
-
-    println!("after merge {} {}", actual_len, start_len);
-
-    if actual_len < start_len {
-        stdout().flush();
-        Some(cur_tour)
-    } else {
-        None
-    }
-}
-
-fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, base_limit: f64) -> Option<Tour> {
-    let mut rng = rand::thread_rng();
-
-    //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty, length_slope: 0.01, length_min_slope: 10.0 });
-    let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * 2.5, length_slope: 0.0, length_min_slope: 0.0 });
-
-    let mut cc = 0;
-    let mut added_v = vec!();
-    let mut removed_v = vec!();
-    let mut cand_buf = Vec::new();
-
-    let mut tabu = HashSet::new();
-
-    for i in 0..tour.get_path().len()*2 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, base_limit, "heavy-start-", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
-            if new_tour.get_len() < cur_tour.get_len() {
-                added_v.iter().for_each(|&x| {
-                    tabu.insert(x);
-                });
-                cur_tour = new_tour;
-            }
-        }
-    }
-
-    cur_tour = cur_tour.change_penalty(tour.get_penalty_config());
-
-    let start_len = tour.get_len();
-    let mut actual_len = cur_tour.get_len();
-    let mut actual_real_len = cur_tour.get_real_len();
-
-    println!("go2 {} {} ", start_len, actual_len);
-
-
-    let mut last = 0;
-    let mut fouls = 0;
-    let mut cand_buf = vec!();
-    let mut found_opts = 0;
-    let no_tabu = HashSet::new();
-    for i in 0..1_000_000_000 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf, if found_opts >= 3 {
-            &no_tabu
-        } else {
-            &tabu
-        }, 0) {
-            if new_tour.get_path() != tour.get_path() {
-                if new_tour.get_len() < actual_len {
-                    found_opts += 1;
-                    actual_len = new_tour.get_len();
-                    actual_real_len = new_tour.get_real_len();
-                    println!("bet {} {} {}", actual_len, start_len, i - last);
-                    last = i;
-                    cur_tour = new_tour;
-                    fouls = 0;
-                }
-            } else {
-                fouls += 1;
-                if fouls == 10 {
-                    break;
-                }
-            }
-        }
-        if i - last > 2_000_000 {
-            break;
-        }
-        if actual_len < start_len {
-            break;
-        }
-    }
-
-    cur_tour = merge(&cur_tour, &tour, prefix, tour.get_penalty_config());
-    actual_len = cur_tour.get_len();
-
-    println!("after merge {} {}", actual_len, start_len);
-
-    if actual_len < start_len {
-        stdout().flush();
-        Some(cur_tour)
-    } else {
-        None
-    }
-}
-
-fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, base_limit: f64) -> Option<Tour> {
+fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64) -> Option<Tour> {
     let mut rng = rand::thread_rng();
 
     let mut cur_tour = tour.clone();
@@ -446,7 +282,7 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], prefix: &str, bas
     let mut removed_v = vec!();
     let mut cand_buf = vec!();
     for i in 0..1_000_000_000 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, 0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, pi, 0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
             if new_tour.get_path() != tour.get_path() {
                 if new_tour.get_len() < actual_len {
                     actual_len = new_tour.get_len();
@@ -532,6 +368,7 @@ fn main() {
     let mut penalty_config: PenaltyConfig = Default::default();
     penalty_config.base_penalty = opt.penalty;
 
+    let pi = load_pi(nodes.len());
     let primes = Arc::new(get_primes(nodes.len()));
     let tour = Arc::new(Mutex::new(Tour::new(load_tour(&opt.load_from), nodes.clone(), primes.clone(), penalty_config)));
     //let candidates = load_candidates(opt.cand_limit);
@@ -561,13 +398,14 @@ fn main() {
         let our_candidates = candidates_w.clone();
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
         let base_limit = opt.base_limit;
+        let our_pi = pi.clone();
         let handle = thread::spawn(move || {
             /*thread::sleep(time::Duration::new(180, 0));*/
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour_base) = do_opt2b(&mut our_tour, &our_candidates, &prefix, base_limit) {
+                if let Some(new_tour_base) = do_opt2b(&mut our_tour, &our_candidates, &our_pi, &prefix, base_limit) {
                     //println!("new len {}", new_tour.get_len());
                     {
                         let main_tour = main_tour_mutex.lock().unwrap().clone();
@@ -609,6 +447,7 @@ fn main() {
         let our_candidates = candidates_w.clone();
         let prefix = opt.save_to.clone();
         let base_limit = opt.base_limit;
+        let our_pi = pi.clone();
         let handle = thread::spawn(move || {
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
@@ -617,7 +456,7 @@ fn main() {
             let mut removed_v = vec!();
             let mut cand_buf = vec!();
             loop {
-                if let Some((new_tour, pr)) = do_opt(&mut our_tour, &our_candidates, temp, base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
+                if let Some((new_tour, pr)) = do_opt(&mut our_tour, &our_candidates, &our_pi, temp, base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
                     {
                         let mut main_tour = main_tour_mutex.lock().unwrap();
                         if new_tour.get_len() < main_tour.get_len() || (temp > 0.0 && ((main_tour.get_len() - new_tour.get_len()) / temp).exp() > pr) {
@@ -653,13 +492,14 @@ fn main() {
         let our_candidates = candidates_w.clone();
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
         let base_limit = opt.base_limit;
+        let our_pi = pi.clone();
         let handle = thread::spawn(move || {
             /*thread::sleep(time::Duration::new(90, 0));*/
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour_base) = do_opt2p(&mut our_tour, &our_candidates, &prefix, base_limit, thread_id) {
+                if let Some(new_tour_base) = do_opt2p(&mut our_tour, &our_candidates, &our_pi, &prefix, base_limit, thread_id) {
                     //println!("new len {}", new_tour.get_len());
                     {
                         let main_tour = main_tour_mutex.lock().unwrap().clone();
