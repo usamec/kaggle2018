@@ -39,7 +39,7 @@ fn merge(a: &Tour, b: &Tour, prefix: &str, penalty_config: PenaltyConfig) -> Tou
     a.make_new(load_tour(&f3))
 }
 
-const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 24] = [
+/*const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 24] = [
     //(0.1, 0.0, 0.0, 200000, 0.3, 4, 0),     // 0 x
     //(0.1, 0.0, 0.0, 400000, 0.3, 4, 0),     // 1      y
     (0.1, 0.0, 0.0, 1000000, 0.3, 4, 0),     // 0
@@ -79,10 +79,45 @@ const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 24] = [
     (0.1, 0.01, 5.0, 400000, 0.0, 0, 3),    //21 x    yy
     (0.1, 0.01, 5.0, 800000, 0.0, 0, 3),    //22 xx   yyy
     (0.1, 0.01, 5.0, 1200000, 0.0, 0, 3),   //23 x    y
+];*/
+
+const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 24] = [
+    (0.1, 0.0, 0.0, 1000000, 0.3, 4, 0),    // 0 y
+    (0.1, 0.0, 0.0, 1400000, 0.3, 4, 0),    // 1 y
+    (0.1, 0.0, 0.0, 600000, 0.3, 4, 0),     // 2 yy
+
+    (0.1, 0.0, 0.0, 600000, 0.3, 0, 3),     // 3 yy
+    (0.1, 0.0, 0.0, 1000000, 0.3, 0, 3),    // 4 y
+    (0.1, 0.0, 0.0, 1400000, 0.3, 0, 3),    // 5 y
+
+
+    (0.25, 0.0, 0.0, 200000, 0.0, 4, 0),    // 6 yy
+    (0.25, 0.0, 0.0, 400000, 0.0, 4, 0),    // 7 y
+    (0.25, 0.0, 0.0, 600000, 0.0, 4, 0),    // 8 y
+
+    (0.25, 0.0, 0.0, 600000, 0.0, 0, 3),    // 9
+    (0.25, 0.0, 0.0, 1000000, 0.0, 0, 3),   //10 y
+    (0.25, 0.0, 0.0, 1400000, 0.0, 0, 3),   //11 y
+
+    (0.05, 0.0, 0.0, 600000, 0.0, 4, 0),    //12
+    (0.05, 0.0, 0.0, 1000000, 0.0, 4, 0),   //13 y
+    (0.05, 0.0, 0.0, 1400000, 0.0, 4, 0),   //14
+
+    (0.05, 0.0, 0.0, 600000, 0.0, 0, 3),    //15
+    (0.05, 0.0, 0.0, 1000000, 0.0, 0, 3),   //16 yy
+    (0.05, 0.0, 0.0, 1400000, 0.0, 0, 3),   //17 y
+
+    (0.1, 0.01, 5.0, 200000, 0.0, 4, 0),    //18
+    (0.1, 0.01, 5.0, 400000, 0.0, 4, 0),    //19
+    (0.1, 0.01, 5.0, 600000, 0.0, 4, 0),    //20
+
+    (0.1, 0.01, 5.0, 400000, 0.0, 0, 3),    //21
+    (0.1, 0.01, 5.0, 800000, 0.0, 0, 3),    //22 yyy
+    (0.1, 0.01, 5.0, 1200000, 0.0, 0, 3),   //23 yy
 ];
 
 fn do_opt2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
-    let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id];
+    let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id%24];
 
     let mut rng = rand::thread_rng();
 
@@ -255,7 +290,7 @@ fn main() {
 
                         let new_tour = merge(&new_tour_base, &main_tour, &prefix, main_tour.get_penalty_config());
                         if new_tour.get_len() < main_tour_mutex.lock().unwrap().get_len() {
-                            println!("acceptxa {} {} real {} {}", thread_id, new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
+                            println!("acceptxa {} {} real {} {}", thread_id % 24, new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
                             our_tour = new_tour;
                             our_tour_hash = our_tour.hash();
 

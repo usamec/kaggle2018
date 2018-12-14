@@ -61,9 +61,9 @@ fn merge(a: &Tour, b: &Tour, prefix: &str, penalty_config: PenaltyConfig) -> Tou
     (1.0, 0.01, 5.0, 800000, 0.0, 0, 3),    // 5 xx   17 23 29 35
 ];*/
 
-const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 3] = [
-    (1.0, 0.0, 0.0, 600000, 0.3, 0, 3),     // 0 x    18 24 30 36
-    (1.0, 0.0, 0.0, 1200000, 0.3, 0, 3),     // 1 x    18 24 30 36
+const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 5] = [
+    (1.0, 0.0, 0.0, 400000, 0.3, 0, 3),     // 0 x    18 24 30 36
+    (1.0, 0.0, 0.0, 1000000, 0.3, 0, 3),     // 1 x    18 24 30 36
 
 /*    (2.5, 0.0, 0.0, 600000, 0.0, 4, 0),    // 1 xx   19 25 31 37
 
@@ -73,11 +73,13 @@ const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 3] = [
 
     (1.0, 0.01, 5.0, 600000, 0.0, 4, 0),    // 4      16 22 28 34*/
 
+    (2.5, 0.0, 0.0, 800000, 0.0, 0, 3),
+    (0.5, 0.0, 0.0, 800000, 0.0, 0, 3),
     (1.0, 0.01, 5.0, 800000, 0.0, 0, 3),    // 5 xx   17 23 29 35
 ];
 
 fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
-    let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id % 3];
+    let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id % 5];
 
     let mut rng = rand::thread_rng();
 
@@ -506,7 +508,7 @@ fn main() {
 
                         let new_tour = merge(&new_tour_base, &main_tour, &prefix, main_tour.get_penalty_config());
                         if new_tour.get_len() <  main_tour_mutex.lock().unwrap().get_len() {
-                            println!("acceptxw {} {} real {} {}", thread_id % 3, new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
+                            println!("acceptxw {} {} real {} {}", thread_id % 5, new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
                             our_tour = new_tour;
                             our_tour_hash = our_tour.hash();
 
