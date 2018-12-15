@@ -110,7 +110,7 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
     let mut actual_len = cur_tour.get_len();
     let mut actual_real_len = cur_tour.get_real_len();
 
-    println!("go {} {} {} ", thread_id % 3, start_len, actual_len);
+    println!("go {} {} {} ", thread_id % 5, start_len, actual_len);
 
 
     let mut last = 0;
