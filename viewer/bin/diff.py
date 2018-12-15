@@ -49,21 +49,33 @@ def diff_paths(cities, path1, path2):
     edges2 = to_edges(path2)
     set1 = set(edges1)
     set2 = set(edges2)
-    l = lambda t: (t[1], get_penalty(t[0]+1, t[1]))
-    map1 = dict(map(l, enumerate(edges1)))
-    map2 = dict(map(l, enumerate(edges2)))
+
+    def penalty(t):
+        return (t[1], get_penalty(t[0]+1, t[1]))
+
+    def idx(t):
+        return (t[1], t[0] % 10)
+
+    map1 = dict(map(penalty, enumerate(edges1)))
+    map2 = dict(map(penalty, enumerate(edges2)))
+    
+    imap1 = dict(map(idx, enumerate(edges1)))
+    imap2 = dict(map(idx, enumerate(edges2)))
 
     added = []
     removed = []
     reverse = []
     common = []
+    shifted = []
     added_penalty = []
     removed_penalty = []
 
     for i, e in enumerate(edges1):
         if e in set2:
-            if map1[e] == map2[e]:
+            if imap1[e] == imap2[e]:
                 common.append(e)
+            elif map1[e] == map2[e]:
+                shifted.append(e)
             elif map1[e]:
                 removed_penalty.append(e)
             else:
@@ -81,7 +93,7 @@ def diff_paths(cities, path1, path2):
         else:
             added.append(e)
 
-    return (added, reverse, removed, common, added_penalty, removed_penalty)
+    return (added, reverse, removed, common, shifted, added_penalty, removed_penalty)
 
 
 def edge_printer(fout, cities):
@@ -109,13 +121,14 @@ if __name__ == "__main__":
     p1 = read_solution(args.file1)
     p2 = read_solution(args.file2)
     diff_paths(cities, p1, p2)
-    added, reverse, removed, common, added_penalty, removed_penalty = diff_paths(cities, p1, p2)
+    added, reverse, removed, common, shifted, added_penalty, removed_penalty = diff_paths(cities, p1, p2)
     with open(args.out, "w") as fout:
         print_edges = edge_printer(fout, cities)
         print_edges(added, "0x3e8410")
         print_edges(removed, "0xc44129")
         print_edges(reverse, "0xec9332")
-        print_edges(common, "0xcccccc")
+        print_edges(common, "0xeeeeee")
+        print_edges(shifted, "0xaaaaaa")
         print_edges(added_penalty, "0xCE93D8")
         print_edges(removed_penalty, "0x90CAF9")
 
