@@ -50,7 +50,9 @@ def edge_printer(fout, cities):
 
 def get_color(i, edge):
     start, end = edge
-    if i % 10 == 0 and not is_prime(start):
+    if i % 10 == 0 and is_prime(start):
+        return "0x3e8800"
+    elif i % 10 == 0 and not is_prime(start):
         return "0xc44129"
     else:
         return "0xcccccc"
