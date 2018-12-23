@@ -148,19 +148,20 @@ impl Tour {
         let mut prefix_lens_offset_rev = [vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0], vec![0.0]];
         for i in 0..path.len()-1 {
             let current_len = dist(nodes[path[i]], nodes[path[i+1]]);
-            if current_len > penalty_config.big_cutoff && i % 10 == 9 && !primes[i] {
+            if current_len > penalty_config.big_cutoff && i % 10 == 9 && !primes[path[i]] {
                 big_lens.push((path[i], path[i+1]));
             }
             for j in 0..10 {
-                let ll = prefix_lens_offset[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i], &primes, penalty_config);
+                let ll = prefix_lens_offset[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i], &primes, &nodes, penalty_config);
                 prefix_lens_offset[j].push(ll);
 
-                let ll = prefix_lens_offset_rev[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i+1], &primes, penalty_config);
+                let ll = prefix_lens_offset_rev[j].last().unwrap() + get_penalty(current_len, i + 1 + j, path[i+1], &primes, &nodes, penalty_config);
                 prefix_lens_offset_rev[j].push(ll);
             }
         }
 
         let mut hash = DefaultHasher::new();
+        big_lens.sort();
         big_lens.hash(&mut hash);
         let penalty_hash = hash.finish() as usize;
         //  println!("big lens {} {}", big_lens.len(), penalty_hash);
@@ -259,7 +260,7 @@ impl Tour {
             }
             let current_len = dist(self.nodes[cur], self.nodes[prev]);
             total_len += current_len;
-            total_len += get_penalty(current_len, 1 + steps, prev, &self.primes, self.penalty_config);
+            total_len += get_penalty(current_len, 1 + steps, prev, &self.primes, &self.nodes, self.penalty_config);
             steps += 1;
             path.push(cur);
         }
@@ -332,6 +333,7 @@ impl Tour {
     }
 
     fn check_duplicates(added: &[(usize, usize)], removed: &[(usize, usize)]) -> bool {
+        assert_eq!(added.len(), removed.len());
         let mut duplicate = false;
         for i in 0..removed.len() {
             if removed[i].0 == 0 || removed[i].1 == 0 {
@@ -351,6 +353,15 @@ impl Tour {
             if added[i].0 == 0 || added[i].1 == 0 {
                 return true;
             }
+            for j in 0..i {
+                if added[i] == added[j] {
+                    duplicate = true;
+                }
+                if added[i].0 == added[j].1 && added[i].1 == added[j].0 {
+                    duplicate = true;
+                }
+            }
+
             for j in 0..removed.len() {
                 if added[i] == removed[j] {
                     duplicate = true;
@@ -364,6 +375,8 @@ impl Tour {
     }
 
     pub fn count_cycles(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> (usize, Vec<Vec<(usize, usize)>>) {
+        /*println!("add {:?}", added);
+        println!("rem {:?}", removed);*/
         if !Tour::check_duplicates(added, removed) {
             let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
             let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
@@ -501,7 +514,7 @@ impl Tour {
                 };
 
                 let mut current_len = dist(self.nodes[added[added_pos].0], self.nodes[added[added_pos].1]);
-                current_len += get_penalty(current_len, 1 + cur_offset, self.path[current], &self.primes, self.penalty_config);
+                current_len += get_penalty(current_len, 1 + cur_offset, self.path[current], &self.primes, &self.nodes, self.penalty_config);
                 total_len += current_len;
                 cur_offset += 1;
                 cur_offset %= 10;

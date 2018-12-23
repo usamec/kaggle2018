@@ -37,12 +37,13 @@ fn merge(a: &Tour, b: &Tour, prefix: &str, penalty_config: PenaltyConfig) -> Tou
     let f2 = format!("{}-2.csv", prefix);
     let f3 = format!("{}-3.csv", prefix);
     let cur_pen = format!("{}", penalty_config.base_penalty);
-    let cur_thres = format!("{}", 0.0);
+    let ls = format!("{}", penalty_config.length_slope);
+    let mb = format!("{}", penalty_config.max_penalty_bonus);
 
     a.save(&f1);
     b.save(&f2);
 
-    Command::new("./recombinator").arg(&f1).arg(&f2).arg(&f3).arg(&cur_pen).arg(&cur_thres).status().expect("recomb failed");
+    Command::new("./recombinator2").arg(&f1).arg(&f2).arg(&f3).arg(&cur_pen).arg(&ls).arg(&mb).status().expect("recomb failed");
 
     a.make_new(load_tour(&f3))
 }
@@ -61,7 +62,9 @@ fn merge(a: &Tour, b: &Tour, prefix: &str, penalty_config: PenaltyConfig) -> Tou
     (1.0, 0.01, 5.0, 800000, 0.0, 0, 3),    // 5 xx   17 23 29 35
 ];*/
 
-const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 5] = [
+const n_configs: usize = 4;
+
+const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); n_configs] = [
     (1.0, 0.0, 0.0, 400000, 0.3, 0, 3),     // 0 x    18 24 30 36
     (1.0, 0.0, 0.0, 1000000, 0.3, 0, 3),     // 1 x    18 24 30 36
 
@@ -75,16 +78,19 @@ const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); 5] = [
 
     (2.5, 0.0, 0.0, 800000, 0.0, 0, 3),
     (0.5, 0.0, 0.0, 800000, 0.0, 0, 3),
-    (1.0, 0.01, 5.0, 800000, 0.0, 0, 3),    // 5 xx   17 23 29 35
+    /*(1.0, 0.01, 5.0, 800000, 0.0, 0, 3),*/    // 5 xx   17 23 29 35
 ];
 
 fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
-    let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id % 5];
+    let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id % n_configs];
 
     let mut rng = rand::thread_rng();
 
     //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty, length_slope: 0.01, length_min_slope: 10.0 });
-    let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * bp, length_slope: ls, length_min_slope: lms, ..Default::default() });
+    //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * bp, length_slope: ls, length_min_slope: lms, ..Default::default() });
+    let mut penalty_config = tour.get_penalty_config();
+    penalty_config.base_penalty *= bp;
+    let mut cur_tour = tour.change_penalty(penalty_config);
 
     let mut cc = 0;
     let mut added_v = vec!();
@@ -110,7 +116,7 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
     let mut actual_len = cur_tour.get_len();
     let mut actual_real_len = cur_tour.get_real_len();
 
-    println!("go {} {} {} ", thread_id % 5, start_len, actual_len);
+    println!("go {} {} {} ", thread_id % n_configs, start_len, actual_len);
 
 
     let mut last = 0;
@@ -160,6 +166,173 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
     } else {
         None
     }
+}
+
+const n_local_configs: usize = 6;
+
+const opt_local_configs: [(bool, f64, usize, f64, usize, f64, usize, usize); n_local_configs] = [
+    (false, 3.0, 250_000, 0.3, 1_000_000, 1.2, 2_000_000,2_000_000), //0    0
+    (false, 0.1, 250_000, 2.5, 1_000_000, 0.8, 2_000_000,2_000_000), //1    1
+    (false, 0.1, 250_000, 0.5, 3_000_000, 0.8, 2_000_000,2_000_000), //2    2
+    //(false, 0.1, 125_000, 0.5, 1_000_000, 0.8, 1_000_000,1_000_000), //3
+    (false, 0.2, 500_000, 0.5, 3_000_000, 0.8, 2_000_000,2_000_000), //4    3
+    (false, 6.0, 1000_000, 3.0, 1000_000, 1.5, 2_000_000,3_000_000),   //5  4
+    //(false, 6.0, 500_000, 3.0, 500_000, 1.5, 1_000_000,2_000_000),   //6
+    (false, 5.0, 500_000, 3.0, 500_000, 1.5, 1_000_000,2_000_000),   //7    5
+];
+
+fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
+    let (alter_hash, first_penalty, first_iters, second_penalty, second_iters, third_penalty, third_iters, final_iters) = opt_local_configs[thread_id % n_local_configs];
+
+    /*if alter_hash {
+        return do_opt_alter_hash(tour, candidates, pi, prefix, base_limit, thread_id);
+    }*/
+
+    let mut rng = rand::thread_rng();
+    let mut added_v = vec!();
+    let mut removed_v = vec!();
+    let mut cand_buf = Vec::new();
+
+    let mut x_min = rng.gen_range(0.0, 4700.0);
+    let mut x_max = x_min + rng.gen_range(500.0, 2000.0);
+    let mut y_min = rng.gen_range(0.0, 2700.0);
+    let mut y_max = y_min + rng.gen_range(500.0, 2000.0);
+
+    let good_nodes = tour.nodes.iter().enumerate().filter_map(|(i, &(x, y))| {
+        if x > x_min && x < x_max && y > y_min && y < y_max {
+            Some(i)
+        } else {
+            None
+        }
+    }).collect::<Vec<_>>();
+
+
+    //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty, length_slope: 0.01, length_min_slope: 10.0 });
+    let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * first_penalty, ..tour.get_penalty_config() });
+    let prefix1 = format!("break-{}({})-{}", thread_id, thread_id % n_local_configs, first_penalty);
+    for i in 0..first_iters {
+        let start_vertex = *good_nodes.choose(&mut rng).unwrap();
+        let start_vertex_pos = cur_tour.get_inv()[start_vertex];
+        if start_vertex == 0 || start_vertex_pos >= cur_tour.get_path().len() - 1 {
+            continue;
+        }
+        let start_vertex2 = cur_tour.get_path()[start_vertex_pos+1];
+        if let Some((new_tour, _)) = do_opt_start(&mut cur_tour, candidates, pi, 0.0, base_limit, &prefix1, &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0, start_vertex, start_vertex2) {
+            cur_tour = new_tour;
+        }
+    }
+
+    x_min -= 50.0;
+    x_max += 50.0;
+    y_min -= 50.0;
+    y_max += 50.0;
+
+    let good_nodes = tour.nodes.iter().enumerate().filter_map(|(i, &(x, y))| {
+        if x > x_min && x < x_max && y > y_min && y < y_max {
+            Some(i)
+        } else {
+            None
+        }
+    }).collect::<Vec<_>>();
+
+    let prefix2 = format!("break-{}({})-{}", thread_id, thread_id % n_local_configs, second_penalty);
+    let mut cur_tour = cur_tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * second_penalty, ..tour.get_penalty_config() });
+    for i in 0..second_iters {
+        let start_vertex = *good_nodes.choose(&mut rng).unwrap();
+        let start_vertex_pos = cur_tour.get_inv()[start_vertex];
+        if start_vertex == 0 || start_vertex_pos >= cur_tour.get_path().len() - 1 {
+            continue;
+        }
+        let start_vertex2 = cur_tour.get_path()[start_vertex_pos+1];
+        if let Some((new_tour, _)) = do_opt_start(&mut cur_tour, candidates, pi, 0.0, base_limit, &prefix2, &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0, start_vertex, start_vertex2) {
+            cur_tour = new_tour;
+        }
+    }
+
+    x_min -= 50.0;
+    x_max += 50.0;
+    y_min -= 50.0;
+    y_max += 50.0;
+
+    let good_nodes = tour.nodes.iter().enumerate().filter_map(|(i, &(x, y))| {
+        if x > x_min && x < x_max && y > y_min && y < y_max {
+            Some(i)
+        } else {
+            None
+        }
+    }).collect::<Vec<_>>();
+
+    let prefix3 = format!("break-{}({})-{}", thread_id, thread_id % n_local_configs, third_penalty);
+    let mut cur_tour = cur_tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * third_penalty, ..tour.get_penalty_config() });
+    for i in 0..third_iters {
+        let start_vertex = *good_nodes.choose(&mut rng).unwrap();
+        let start_vertex_pos = cur_tour.get_inv()[start_vertex];
+        if start_vertex == 0 || start_vertex_pos >= cur_tour.get_path().len() - 1 {
+            continue;
+        }
+        let start_vertex2 = cur_tour.get_path()[start_vertex_pos+1];
+        if let Some((new_tour, _)) = do_opt_start(&mut cur_tour, candidates, pi, 0.0, base_limit, &prefix3, &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0, start_vertex, start_vertex2) {
+            cur_tour = new_tour;
+        }
+    }
+
+    x_min -= 50.0;
+    x_max += 50.0;
+    y_min -= 50.0;
+    y_max += 50.0;
+
+    let good_nodes = tour.nodes.iter().enumerate().filter_map(|(i, &(x, y))| {
+        if x > x_min && x < x_max && y > y_min && y < y_max {
+            Some(i)
+        } else {
+            None
+        }
+    }).collect::<Vec<_>>();
+
+    let prefix4 = format!("break-{}({})-{}", thread_id, thread_id % n_local_configs, 1.0);
+    let mut cur_tour = cur_tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty, ..tour.get_penalty_config() });
+    for i in 0..final_iters {
+        let start_vertex = *good_nodes.choose(&mut rng).unwrap();
+        let start_vertex_pos = cur_tour.get_inv()[start_vertex];
+        if start_vertex == 0 || start_vertex_pos >= cur_tour.get_path().len() - 1 {
+            continue;
+        }
+        let start_vertex2 = cur_tour.get_path()[start_vertex_pos+1];
+        if let Some((new_tour, _)) = do_opt_start(&mut cur_tour, candidates, pi, 0.0, base_limit, &prefix4, &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0, start_vertex, start_vertex2) {
+            cur_tour = new_tour;
+        }
+    }
+    let mut last = 0usize;
+    let mut cc = 0usize;
+    let mut perm = good_nodes.clone();
+    let prefix4b = format!("break-{}({})-{}b", thread_id, thread_id % n_local_configs, 1.0);
+    println!("break-{} go fin {}", thread_id, perm.len());
+    perm.shuffle(&mut rng);
+    loop {
+        let sp = cur_tour.get_inv()[perm[cc % perm.len()]];
+        if sp >= cur_tour.get_path().len() - 1 || sp <= 1 {
+            cc += 1;
+            continue;
+        }
+        if let Some(new_tour) = do_opt_all(&mut cur_tour, candidates, pi, base_limit, &prefix4b, &mut added_v, &mut removed_v, &mut cand_buf, sp) {
+            cur_tour = new_tour;
+            last = cc;
+        }
+        cc += 1;
+        if cc - last > perm.len() {
+            break;
+        }
+        if cc % 1000 == 0 {
+            println!("ccc {} {} {}", cc, cc - last, perm.len());
+        }
+    }
+
+    cur_tour = merge(&cur_tour, &tour, prefix, tour.get_penalty_config());
+    let actual_len = cur_tour.get_len();
+
+    println!("after merge {} {}", actual_len, tour.get_len());
+
+    Some(cur_tour)
 }
 
 fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64) -> Option<Tour> {
@@ -325,7 +498,7 @@ fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
 #[derive(StructOpt, Debug)]
 #[structopt(name = "kopt")]
 struct Config {
-    #[structopt(short = "t", long = "temp", default_value = "0.03")]
+    #[structopt(short = "t", long = "temp", default_value = "0.00")]
     temp: f64,
 
     #[structopt(short = "p", long = "penalty", default_value = "0.1")]
@@ -359,7 +532,20 @@ struct Config {
     save_timestamp: bool,
 
     #[structopt(short = "cf", long = "cand-file", default_value = "../inputs/cities.cand")]
-    cand_file: String
+    cand_file: String,
+
+    #[structopt(short = "mpb", long = "max-penalty-bonus", default_value = "0.0")]
+    max_penalty_bonus: f64,
+
+    #[structopt(short = "ls", long = "length-slope", default_value = "0.0")]
+    length_slope: f64,
+
+    #[structopt(short = "lms", long = "length-min-slope", default_value = "0.0")]
+    length_min_slope: f64,
+
+    #[structopt(short = "bm", long = "bad-mods", default_value = "0.0")]
+    bad_mods: f64,
+
 }
 
 fn main() {
@@ -369,6 +555,24 @@ fn main() {
 
     let mut penalty_config: PenaltyConfig = Default::default();
     penalty_config.base_penalty = opt.penalty;
+    penalty_config.max_penalty_bonus = opt.max_penalty_bonus;
+    penalty_config.length_slope = opt.length_slope;
+    penalty_config.length_min_slope = opt.length_min_slope;
+    for i in 1..6 {
+        penalty_config.bad_mods[i] = penalty_config.bad_mods[i-1] * opt.bad_mods;
+        if i > 1 {
+            penalty_config.bad_mods[10-i] = penalty_config.bad_mods[10-i+1] * opt.bad_mods;
+        } else {
+            penalty_config.bad_mods[9] = penalty_config.bad_mods[0] * opt.bad_mods;
+        }
+    }
+    let bm_sum = penalty_config.bad_mods.iter().sum::<f64>();
+    for i in 0..10 {
+        penalty_config.bad_mods[i] /= bm_sum;
+    }
+    println!("bm {:?}", penalty_config.bad_mods);
+    /*penalty_config.hash_mod = 223*10;
+    penalty_config.hash_range = 223*9;*/
 
     let pi = load_pi(nodes.len());
     let primes = Arc::new(get_primes(nodes.len()));
@@ -501,14 +705,14 @@ fn main() {
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour_base) = do_opt2p(&mut our_tour, &our_candidates, &our_pi, &prefix, base_limit, thread_id) {
+                if let Some(new_tour_base) = do_opt_break_local(&mut our_tour, &our_candidates, &our_pi, &prefix, base_limit, thread_id) {
                     //println!("new len {}", new_tour.get_len());
                     {
                         let main_tour = main_tour_mutex.lock().unwrap().clone();
 
                         let new_tour = merge(&new_tour_base, &main_tour, &prefix, main_tour.get_penalty_config());
                         if new_tour.get_len() <  main_tour_mutex.lock().unwrap().get_len() {
-                            println!("acceptxw {} {} real {} {}", thread_id % 5, new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
+                            println!("acceptxw {} {} real {} {}", thread_id % n_local_configs, new_tour.get_len(), new_tour.get_real_len(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
                             our_tour = new_tour;
                             our_tour_hash = our_tour.hash();
 
