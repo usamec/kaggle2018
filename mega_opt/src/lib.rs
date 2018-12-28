@@ -749,6 +749,10 @@ pub fn do_opt_all(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64],
     do_opt_all_edge(tour, candidates, pi, base_limit, log_prefix, added, removed, cand_buf, start_pos, start_pos+1, 4).or_else(|| do_opt_all_edge(tour, candidates, pi, base_limit, log_prefix, added, removed, cand_buf, start_pos+1, start_pos, 4))
 }
 
+pub fn do_opt_all_limit(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>, start_pos: usize, max_k: usize) -> Option<Tour> {
+    do_opt_all_edge(tour, candidates, pi, base_limit, log_prefix, added, removed, cand_buf, start_pos, start_pos+1, max_k).or_else(|| do_opt_all_edge(tour, candidates, pi, base_limit, log_prefix, added, removed, cand_buf, start_pos+1, start_pos, max_k))
+}
+
 thread_local!(static opt_start_v: RefCell<usize> = RefCell::new(1));
 
 pub fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>,

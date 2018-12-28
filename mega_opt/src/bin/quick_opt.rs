@@ -108,14 +108,21 @@ fn main() {
         }
     }*/
 
-    /*for i in 1..tour.get_path().len() - 1 {
-        let res = do_opt_all(&mut tour, &candidates_w, &pi, opt.base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf, i);
+    for i in 1..tour.get_path().len() - 1 {
+        let res = do_opt_all_limit(&mut tour, &candidates_w, &pi, opt.base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf, i, 10);
         if res.is_some() || i % 100 == 0 {
             println!("{} {}", i, res.is_some());
         }
-    }*/
+        if let Some(new_tour) = res {
+            if new_tour.get_len() < tour.get_len() {
+                tour = new_tour;
+                tour.save(&format!("{}-best.csv", opt.save_to));
+            }
+        }
 
-    loop {
+    }
+
+    /*loop {
         if let Some((new_tour, pr)) = do_opt_ds(&mut tour, &candidates_w, &pi, opt.base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
             panic!("booo2");
             tour = new_tour;
@@ -129,7 +136,7 @@ fn main() {
         if cc % 100000 == 0 {
             println!("cc {} {} {}", cc, 0, Local::now().format("%Y-%m-%dT%H:%M:%S"));
         }
-    }
+    }*/
 }
 
 fn fix_it(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, mut added_sum: f64, mut removed_sum: f64) -> Option<(Tour, f64)> {
