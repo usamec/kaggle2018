@@ -94,6 +94,21 @@ pub fn load_pi(n_nodes: usize) -> Vec<f64> {
     out
 }
 
+pub fn load_pi2(n_nodes: usize) -> Vec<f64> {
+    let mut out = vec![0.0; n_nodes];
+    let f = File::open("../inputs/cities.pi.0").expect("file not found");
+    let file = BufReader::new(&f);
+    for line in file.lines().skip(1) {
+        let cur_line = line.unwrap();
+        let parts = cur_line.trim().split(" ").collect::<Vec<_>>();
+        if parts.len() == 2 {
+            out[parts[0].parse::<usize>().unwrap() - 1] = parts[1].parse::<f64>().unwrap() / 100_000.0;
+        }
+    }
+    println!("top pi {:?}", &out[..10]);
+    out
+}
+
 pub fn load_candidates(cand_limit: usize) -> Vec<Vec<usize>> {
     let f = File::open("../inputs/pi-nearest.txt").expect("file not found");
     let file = BufReader::new(&f);
@@ -541,12 +556,14 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f6
                                     let new_tour = tour.make_new(p, );
                                     println!("{}accept nonseq {} real {}, added len {} a - r {} {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                                     return Some((new_tour, pr));
-                                }  /*else if rand::thread_rng().gen_range(0, 10) == 0 {
+                                }  else if added.len() <= 6 && len < tour.get_len() + 2.0 {
                                     //println!("maybe fix {} {}", len - tour.get_len(), added_sum - removed_sum);
                                     if let Some(res) = fix_it(tour, candidates, pi, base_limit, log_prefix, added, removed, added_sum, removed_sum) {
+                                        //println!("founf fix {}", len - tour.get_len());
                                         return Some(res);
                                     }
-                                }*/
+                                    //println!("inner longer {} {} {}", added.len(), len - tour.get_len(), added_sum - removed_sum);
+                                }
                             }
                         }
 
@@ -599,7 +616,7 @@ pub fn do_opt_all_inner(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &
                         println!("{}accept {} real {}, added len {} added - removed {} {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                         stdout().flush();
                         return Some(new_tour);
-                    } else if added.len() <= 3 {
+                    } else if added.len() <= 6 {
                         //println!("maybe fix {} {}", len - tour.get_len(), added_sum - removed_sum);
                         if let Some(res) = fix_it(tour, candidates, pi, base_limit, log_prefix, added, removed, added_sum, removed_sum) {
                             return Some(res.0);
@@ -753,21 +770,39 @@ pub fn do_opt_all_limit(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &
     do_opt_all_edge(tour, candidates, pi, base_limit, log_prefix, added, removed, cand_buf, start_pos, start_pos+1, max_k).or_else(|| do_opt_all_edge(tour, candidates, pi, base_limit, log_prefix, added, removed, cand_buf, start_pos+1, start_pos, max_k))
 }
 
-thread_local!(static opt_start_v: RefCell<usize> = RefCell::new(1));
+fn rand_order() -> Vec<usize> {
+    let mut v = (1..197769).collect::<Vec<_>>();
+
+    v.shuffle(&mut rand::thread_rng());
+
+    v
+}
+
+thread_local!(static opt_start_v: RefCell<usize> = RefCell::new(0));
+
+thread_local!(static opt_start_order: RefCell<Vec<usize>> = RefCell::new(rand_order()));
 
 pub fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>,
           tabu: &HashSet<(usize, usize)>, min_k: usize) -> Option<(Tour, f64)> {
     /*let start_path_pos = rng.gen_range(1, tour.get_path().len() - 1);*/
-    let start_path_pos: usize = opt_start_v.with(|sv| {
+    let order_ind: usize = opt_start_v.with(|sv| {
         *sv.borrow()
+    });
+
+    let start_path_pos = opt_start_order.with(|ord| {
+        ord.borrow()[order_ind]
+    });
+
+    let ord_len = opt_start_order.with(|ord| {
+        ord.borrow().len()
     });
     let mut start_vertex = tour.get_path()[start_path_pos];
     let mut start_vertex2 = tour.get_path()[(start_path_pos) + 1];
     opt_start_v.with(|sv| {
         let mut start_pos = sv.borrow_mut();
         *start_pos += 1;
-        if *start_pos == tour.get_path().len() - 1 {
-            *start_pos = 1;
+        if *start_pos == ord_len {
+            *start_pos = 0;
         }
     });
 
@@ -868,7 +903,7 @@ pub fn do_opt_start(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64
                     println!("{}accept 2.5 {} real {}, added len {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len());
                     stdout().flush();
                     return Some((new_tour, pr));
-                } else if added.len() <= 3 {
+                } else if added.len() <= 6 {
                     //println!("maybe fix {} {}", len - tour.get_len(), added_sum - removed_sum);
                     if let Some(res) = fix_it(tour, candidates, pi, base_limit, log_prefix, added, removed, added_sum, removed_sum) {
                         return Some(res);
@@ -1002,7 +1037,7 @@ pub fn do_opt_start(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64
                         println!("{}accept {} {} real {}, added len {} added - removed {} {}", log_prefix, i+2, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                         stdout().flush();
                         return Some((new_tour, pr));
-                    } else if added.len() <= 3 {
+                    } else if added.len() <= 6 {
                         //println!("maybe fix {} {}", len - tour.get_len(), added_sum - removed_sum);
                         if let Some(res) = fix_it(tour, candidates, pi, base_limit, log_prefix, added, removed, added_sum, removed_sum) {
                             return Some(res);
@@ -1148,6 +1183,7 @@ fn fix_it(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_li
         removed_sum += dist_pi(&pi, &tour.nodes, start_vertex, start_vertex2);
 
         if let Some(new_tour) = do_opt_all2(tour, candidates, pi, base_limit, log_prefix, added, removed, start_vertex, start_vertex2, 2, added_sum, removed_sum) {
+        //if let Some(new_tour) = do_opt_all_inner(tour, candidates, pi, base_limit, log_prefix, added, removed, start_vertex, start_vertex2, 2, added_sum, removed_sum) {
             println!("found fix {} {}", new_tour.get_len(), tour.get_len());
             //panic!("booo");
             return Some((new_tour, 0.0));
@@ -1155,5 +1191,6 @@ fn fix_it(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_li
         removed_sum -= dist_pi(&pi, &tour.nodes, start_vertex, start_vertex2);
         removed.pop();
     }
+    //println!("done fix");
     None
 }
