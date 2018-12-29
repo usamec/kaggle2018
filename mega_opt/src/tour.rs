@@ -56,7 +56,7 @@ impl TwoEdges {
     }
 
     fn rand(&self) -> usize {
-        let mut rng = rand::thread_rng();
+        let mut rng = our_rng();
         self.edges[rng.gen_range(0, 2)]
     }
 }
@@ -572,7 +572,7 @@ mod tests {
 
     #[test]
     fn test_tour_check() {
-        let mut rng = rand::thread_rng();
+        let mut rng = our_rng();
         let nodes = (0..100).map(|_| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>();
 
         let mut tour_path = Vec::from_iter(0..100);
@@ -633,7 +633,7 @@ mod tests {
 
     #[test]
     fn test_dist() {
-        let mut rng = rand::thread_rng();
+        let mut rng = our_rng();
         let nodes = Arc::new((0..100).map(|_| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>());
 
         let mut tour_path = Vec::from_iter(0..100);
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn test_dist_rev() {
-        let mut rng = rand::thread_rng();
+        let mut rng = our_rng();
         let nodes = Arc::new((0..100).map(|_| (rng.gen_range(-1.0 ,1.0), rng.gen_range(-100.0 ,100.0))).collect::<Vec<_>>());
 
         let mut tour_path = Vec::from_iter(0..100);

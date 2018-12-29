@@ -168,7 +168,7 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
     }
 }
 
-const n_local_configs: usize = 7;
+/*const n_local_configs: usize = 7;
 
 const opt_local_configs: [(bool, f64, usize, f64, usize, f64, usize, usize); n_local_configs] = [
     (false, 3.0, 250_000, 0.3, 1_000_000, 1.2, 2_000_000,2_000_000), //0    0
@@ -181,6 +181,16 @@ const opt_local_configs: [(bool, f64, usize, f64, usize, f64, usize, usize); n_l
     (false, 6.0, 1000_000, 3.0, 1000_000, 1.5, 2_000_000,3_000_000),   //5  5
     //(false, 6.0, 500_000, 3.0, 500_000, 1.5, 1_000_000,2_000_000),   //6
     (false, 5.0, 500_000, 3.0, 500_000, 1.5, 1_000_000,2_000_000),   //7    6
+];*/
+
+const n_local_configs: usize = 5;
+
+const opt_local_configs: [(bool, f64, usize, f64, usize, f64, usize, usize); n_local_configs] = [
+    (false, 3.0, 250_000, 0.3, 1_000_000, 1.2, 2_000_000,2_000_000), //0    0
+    (false, 0.1, 250_000, 2.5, 1_000_000, 0.8, 2_000_000,2_000_000), //1    1
+    (false, 3.0, 350_000, 0.3, 1_300_000, 1.2, 2_300_000,2_300_000), //0    2
+    (false, 0.1, 350_000, 2.5, 1_300_000, 0.8, 2_300_000,2_300_000), //1    3
+    (false, 5.0, 500_000, 3.0, 500_000, 1.5, 1_000_000,2_000_000),   //7    4
 ];
 
 fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
@@ -337,7 +347,7 @@ fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f
     Some(cur_tour)
 }
 
-const n_heavy_configs: usize = 9;
+/*const n_heavy_configs: usize = 9;
 
 const opt_heavy_configs: [(usize, f64); n_heavy_configs] = [
     (30, 10.0),
@@ -349,7 +359,16 @@ const opt_heavy_configs: [(usize, f64); n_heavy_configs] = [
     (30, 7.0),
     (60, 7.0),
     (15, 7.0),
+];*/
+
+const n_heavy_configs: usize = 2;
+
+const opt_heavy_configs: [(usize, f64); n_heavy_configs] = [
+    (90, 10.0),
+    (60, 10.0),
 ];
+
+
 
 fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
     let (swap_count, max_decr) = opt_heavy_configs[thread_id % n_heavy_configs];
@@ -713,7 +732,7 @@ fn main() {
                     //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
                 }
                 cc += 1;
-                if cc % 100 == 0 {
+                if cc % 100000 == 0 {
                     println!("cc {} {} {}", cc, thread_id, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                 }
                 if main_tour_hash.load(Ordering::Relaxed) != our_tour_hash {

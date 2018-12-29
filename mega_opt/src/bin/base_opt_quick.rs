@@ -62,11 +62,10 @@ fn merge(a: &Tour, b: &Tour, prefix: &str, penalty_config: PenaltyConfig) -> Tou
     (1.0, 0.01, 5.0, 800000, 0.0, 0, 3),    // 5 xx   17 23 29 35
 ];*/
 
-const n_configs: usize = 4;
+const n_configs: usize = 2;
 
 const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); n_configs] = [
-    (1.0, 0.0, 0.0, 400000, 0.3, 0, 3),     // 0 x    18 24 30 36
-    (1.0, 0.0, 0.0, 1000000, 0.3, 0, 3),     // 1 x    18 24 30 36
+    //(1.0, 0.0, 0.0, 40000, 0.3, 0, 3),     // 0 x    18 24 30 36
 
 /*    (2.5, 0.0, 0.0, 600000, 0.0, 4, 0),    // 1 xx   19 25 31 37
 
@@ -76,15 +75,15 @@ const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); n_configs] = [
 
     (1.0, 0.01, 5.0, 600000, 0.0, 4, 0),    // 4      16 22 28 34*/
 
-    (2.5, 0.0, 0.0, 800000, 0.0, 0, 3),
-    (0.5, 0.0, 0.0, 800000, 0.0, 0, 3),
+    (2.5, 0.0, 0.0, 40000, 0.0, 0, 3),
+    (0.5, 0.0, 0.0, 40000, 0.0, 0, 3),
     /*(1.0, 0.01, 5.0, 800000, 0.0, 0, 3),*/    // 5 xx   17 23 29 35
 ];
 
 fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
     let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id % n_configs];
 
-    let mut rng = rand::thread_rng();
+    let mut rng = our_rng();
 
     //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty, length_slope: 0.01, length_min_slope: 10.0 });
     //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * bp, length_slope: ls, length_min_slope: lms, ..Default::default() });
@@ -99,8 +98,11 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
 
     let mut tabu = HashSet::new();
 
+
+    let prefix1 = format!("hstart-{}({})-", thread_id, thread_id % n_configs);
+
     for i in 0..iters {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, pi,temp, base_limit, "heavy-start-", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), min_k) {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, pi,temp, base_limit, &prefix1, &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), min_k) {
             {
                 added_v.iter().for_each(|&x| {
                     tabu.insert(x);
@@ -124,8 +126,9 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
     let mut cand_buf = vec!();
     let mut found_opts = 0;
     let no_tabu = HashSet::new();
+    let prefix2 = format!("h-{}({})-", thread_id, thread_id % n_configs);
     for i in 0..1_000_000_000 {
-        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, pi,0.0, base_limit, "heavy-", &mut added_v, &mut removed_v, &mut cand_buf, if found_opts >= tabus {
+        if let Some((new_tour, _)) = do_opt(&mut cur_tour, candidates, pi,0.0, base_limit, &prefix2, &mut added_v, &mut removed_v, &mut cand_buf, if found_opts >= tabus {
             &no_tabu
         } else {
             &tabu
@@ -135,7 +138,7 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
                     found_opts += 1;
                     actual_len = new_tour.get_len();
                     actual_real_len = new_tour.get_real_len();
-                    println!("bet {} {} {}", actual_len, start_len, i - last);
+                    println!("bet {} {} {} {}", thread_id, actual_len, start_len, i - last);
                     last = i;
                     cur_tour = new_tour;
                     fouls = 0;
@@ -147,7 +150,7 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
                 }
             }
         }
-        if i - last > 2_000_000 {
+        if i - last > 500_000 {
             break;
         }
         if actual_len < start_len {
@@ -168,12 +171,14 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
     }
 }
 
-const n_local_configs: usize = 3;
+const n_local_configs: usize = 1;
 
 const opt_local_configs: [(bool, f64, usize, f64, usize, f64, usize, usize); n_local_configs] = [
-    (false, 0.1, 50_000, 2.5, 150_000, 0.8, 200_000,200_000),
-    (false, 3.0, 50_000, 2.0, 150_000, 1.2, 200_000,200_000),
-    (false, 3.0, 50_000, 0.5, 0, 0.8, 0,200_000),
+    /*(false, 0.1, 50_000, 2.5, 150_000, 0.8, 200_000,200_000),
+    (false, 3.0, 50_000, 2.0, 150_000, 1.2, 200_000,200_000),*/
+    (false, 3.0, 50_000, 1.5, 10_000, 0.8, 0,200_000),
+    /*(false, 3.0, 50_000, 1.5, 0, 0.8, 0,50_000),
+    (false, 3.0, 100_000, 1.5, 0, 0.8, 0,100_000),*/
     /*(false, 3.0, 250_000, 0.3, 1_000_000, 1.2, 2_000_000,2_000_000), //0    0
     (false, 0.1, 250_000, 2.5, 1_000_000, 0.8, 2_000_000,2_000_000), //1    1
     (false, 3.0, 350_000, 0.3, 1_300_000, 1.2, 2_300_000,2_300_000), //0    2
@@ -193,15 +198,17 @@ fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f
         return do_opt_alter_hash(tour, candidates, pi, prefix, base_limit, thread_id);
     }*/
 
-    let mut rng = rand::thread_rng();
+    let mut rng = our_rng();
     let mut added_v = vec!();
     let mut removed_v = vec!();
     let mut cand_buf = Vec::new();
 
-    let mut x_min = rng.gen_range(0.0, 4700.0);
-    let mut x_max = x_min + rng.gen_range(200.0, 1000.0);
-    let mut y_min = rng.gen_range(0.0, 2700.0);
-    let mut y_max = y_min + rng.gen_range(200.0, 1000.0);
+    let xrange = rng.gen_range(200.0, 1000.0);
+    let yrange = rng.gen_range(200.0, 1000.0);
+    let mut x_min = rng.gen_range(0.0, 5200.0 - xrange);
+    let mut x_max = x_min + xrange;
+    let mut y_min = rng.gen_range(0.0, 3100.0 - yrange);
+    let mut y_max = y_min + yrange;
 
     let good_nodes = tour.nodes.iter().enumerate().filter_map(|(i, &(x, y))| {
         if x > x_min && x < x_max && y > y_min && y < y_max {
@@ -321,6 +328,9 @@ fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f
         }
         if let Some(new_tour) = do_opt_all(&mut cur_tour, candidates, pi, base_limit, &prefix4b, &mut added_v, &mut removed_v, &mut cand_buf, sp) {
             cur_tour = new_tour;
+            /*if cur_tour.get_len() < tour.get_len() {
+                break;
+            }*/
             last = cc;
         }
         cc += 1;
@@ -341,7 +351,7 @@ fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f
 }
 
 fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64) -> Option<Tour> {
-    let mut rng = rand::thread_rng();
+    let mut rng = our_rng();
 
     let mut cur_tour = tour.clone();
 
@@ -570,10 +580,18 @@ struct Config {
     #[structopt(short = "bm", long = "bad-mods", default_value = "0.0")]
     bad_mods: f64,
 
+    #[structopt(short = "pf", long = "pi-file", default_value = "../inputs/cities.pi.0")]
+    pi_file: String,
+
+    #[structopt(short = "seed", long = "seed", default_value = "4723")]
+    base_seed: u64,
+
 }
 
 fn main() {
+    println!("{} {} {}", our_rng().gen_range(0, 20), our_rng().gen_range(0, 20), our_rng().gen_range(0, 20));
     let opt = Config::from_args();
+    let base_seed = opt.base_seed;
 
     let nodes = Arc::new(load_poses());
 
@@ -598,7 +616,7 @@ fn main() {
     /*penalty_config.hash_mod = 223*10;
     penalty_config.hash_range = 223*9;*/
 
-    let pi = load_pi2(nodes.len());
+    let pi = load_pi2(nodes.len(), &opt.pi_file);
     let primes = Arc::new(get_primes(nodes.len()));
     let tour = Arc::new(Mutex::new(Tour::new(load_tour(&opt.load_from), nodes.clone(), primes.clone(), penalty_config)));
     //let candidates = load_candidates(opt.cand_limit);
@@ -619,6 +637,7 @@ fn main() {
 
     let tour_hash = Arc::new(AtomicUsize::new(tour.lock().unwrap().hash()));
 
+
     let mut handles = vec![];
     let temp = opt.temp;
     println!("temp {}", temp);
@@ -629,7 +648,9 @@ fn main() {
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
         let base_limit = opt.base_limit;
         let our_pi = pi.clone();
+        let seed = base_seed + thread_id as u64;
         let handle = thread::spawn(move || {
+            seed_rng(seed);
             /*thread::sleep(time::Duration::new(180, 0));*/
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
@@ -678,7 +699,9 @@ fn main() {
         let prefix = opt.save_to.clone();
         let base_limit = opt.base_limit;
         let our_pi = pi.clone();
+        let seed = base_seed + thread_id as u64;
         let handle = thread::spawn(move || {
+            seed_rng(seed);
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
@@ -723,7 +746,9 @@ fn main() {
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
         let base_limit = opt.base_limit;
         let our_pi = pi.clone();
+        let seed = base_seed + thread_id as u64;
         let handle = thread::spawn(move || {
+            seed_rng(seed);
             /*thread::sleep(time::Duration::new(90, 0));*/
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();

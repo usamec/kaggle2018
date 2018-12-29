@@ -1,6 +1,7 @@
 #[macro_use] extern crate assert_approx_eq;
 extern crate rand;
 extern crate chrono;
+extern crate rand_xorshift;
 
 use std::fs::File;
 use std::io::BufReader;
@@ -16,6 +17,10 @@ use chrono::Local;
 use std::cell::RefCell;
 use rand::prelude::*;
 use std::io::Write;
+use std::rc::*;
+use rand_xorshift::XorShiftRng;
+use std::cell::UnsafeCell;
+
 
 mod tour;
 
@@ -94,9 +99,9 @@ pub fn load_pi(n_nodes: usize) -> Vec<f64> {
     out
 }
 
-pub fn load_pi2(n_nodes: usize) -> Vec<f64> {
+pub fn load_pi2(n_nodes: usize, filename: &str) -> Vec<f64> {
     let mut out = vec![0.0; n_nodes];
-    let f = File::open("../inputs/cities.pi.0").expect("file not found");
+    let f = File::open(filename).expect("file not found");
     let file = BufReader::new(&f);
     for line in file.lines().skip(1) {
         let cur_line = line.unwrap();
@@ -220,7 +225,7 @@ pub fn calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[bool], offs
 }
 
 fn patch3(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, mut all_cycle_parts: Vec<Vec<(usize, usize)>>, mut added_sum: f64, mut removed_sum: f64) -> Option<(Tour, f64)> {
-    all_cycle_parts.shuffle(&mut rand::thread_rng());
+    all_cycle_parts.shuffle(&mut our_rng());
     let cycle_parts = &all_cycle_parts[0];
     let cycle_partsb = &all_cycle_parts[1];
 
@@ -287,13 +292,13 @@ fn patch3(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f
                                         let test_fast = tour.test_changes_fast(&added, &removed);
                                         //println!("tf3 {:?} {}", test_fast, tour.get_len());
                                         if let Some(len) = test_fast {
-                                            let pr = rand::thread_rng().gen::<f64>();
+                                            let pr = our_rng().gen::<f64>();
                                             if len < tour.get_len() + temp.min(0.0) || (temp > 0.0 && ((tour.get_len() - len) / temp).exp() > pr) {
                                                 let (_res, p) = tour.test_changes(&added, &removed).unwrap();
                                                 let new_tour = tour.make_new(p, );
                                                 println!("{}accept nonseq3 {} real {}, added len {} a - r {} {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                                                 return Some((new_tour, pr));
-                                            }/* else if rand::thread_rng().gen_range(0, 10) == 0 {
+                                            }/* else if our_rng().gen_range(0, 10) == 0 {
                                                 //println!("maybe fixns3 {} {}", len - tour.get_len(), added_sum - removed_sum);
                                                 if let Some(res) = fix_it(tour, candidates, pi, base_limit, log_prefix, added, removed, added_sum, removed_sum) {
                                                     return Some(res);
@@ -371,13 +376,13 @@ fn patch3(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f
                                         let test_fast = tour.test_changes_fast(&added, &removed);
                                         //println!("tf3b {:?} {}", test_fast, tour.get_len());
                                         if let Some(len) = test_fast {
-                                            let pr = rand::thread_rng().gen::<f64>();
+                                            let pr = our_rng().gen::<f64>();
                                             if len < tour.get_len() + temp.min(0.0) || (temp > 0.0 && ((tour.get_len() - len) / temp).exp() > pr) {
                                                 let (_res, p) = tour.test_changes(&added, &removed).unwrap();
                                                 let new_tour = tour.make_new(p, );
                                                 println!("{}accept nonseq3 {} real {}, added len {} a - r {} {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                                                 return Some((new_tour, pr));
-                                            }  /*else if rand::thread_rng().gen_range(0, 10) == 0 {
+                                            }  /*else if our_rng().gen_range(0, 10) == 0 {
                                                 //println!("maybe fixns {} {}", len - tour.get_len(), added_sum - removed_sum);
                                                 if let Some(res) = fix_it(tour, candidates, pi, base_limit, log_prefix, added, removed, added_sum, removed_sum) {
                                                     return Some(res);
@@ -550,7 +555,7 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f6
                         if added_sum - removed_sum < base_limit {
                             let test_fast = tour.test_changes_fast(&added, &removed);
                             if let Some(len) = test_fast {
-                                let pr = rand::thread_rng().gen::<f64>();
+                                let pr = our_rng().gen::<f64>();
                                 if len < tour.get_len() + temp.min(0.0) || (temp > 0.0 && ((tour.get_len() - len) / temp).exp() > pr){
                                     let (_res, p) = tour.test_changes(&added, &removed).unwrap();
                                     let new_tour = tour.make_new(p, );
@@ -629,11 +634,11 @@ pub fn do_opt_all_inner(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &
             if let Some(r) = patch(tour, candidates, pi, temp, base_limit, log_prefix, added, removed, cycle_parts, added_sum, removed_sum) {
                 return Some(r.0);
             }
-        }/* else if cycles == 3 && rand::thread_rng().gen_range(0, 10) == 0 {
+        }/* else if cycles == 3 && our_rng().gen_range(0, 10) == 0 {
             if let Some(r) = patch3(tour, candidates, pi, temp, base_limit, log_prefix, added, removed, cycle_parts, added_sum, removed_sum) {
                 return Some(r.0);
             }
-        } else if cycles >= 4 && cycles <= 10 && rand::thread_rng().gen_range(0, 10) == 0 {
+        } else if cycles >= 4 && cycles <= 10 && our_rng().gen_range(0, 10) == 0 {
             if let Some(r) = patch3(tour, candidates,  pi,temp, base_limit, log_prefix, added, removed, cycle_parts, added_sum, removed_sum) {
                 return Some(r.0);
             }
@@ -770,10 +775,48 @@ pub fn do_opt_all_limit(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &
     do_opt_all_edge(tour, candidates, pi, base_limit, log_prefix, added, removed, cand_buf, start_pos, start_pos+1, max_k).or_else(|| do_opt_all_edge(tour, candidates, pi, base_limit, log_prefix, added, removed, cand_buf, start_pos+1, start_pos, max_k))
 }
 
+pub struct OurRng {
+    pub rng: *mut XorShiftRng
+}
+
+thread_local!(static our_rng_key: UnsafeCell<XorShiftRng> = {
+   UnsafeCell::new(XorShiftRng::seed_from_u64(0))
+});
+
+pub fn our_rng() -> OurRng {
+    OurRng { rng: our_rng_key.with(|t| t.get()) }
+}
+
+pub fn seed_rng(seed: u64) {
+    unsafe {
+        *our_rng_key.with(|t| t.get()) = XorShiftRng::seed_from_u64(seed);
+    }
+}
+
+impl RngCore for OurRng {
+    #[inline(always)]
+    fn next_u32(&mut self) -> u32 {
+        unsafe { (*self.rng).next_u32() }
+    }
+
+    #[inline(always)]
+    fn next_u64(&mut self) -> u64 {
+        unsafe { (*self.rng).next_u64() }
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        unsafe { (*self.rng).fill_bytes(dest) }
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        unsafe { (*self.rng).try_fill_bytes(dest) }
+    }
+}
+
 fn rand_order() -> Vec<usize> {
     let mut v = (1..197769).collect::<Vec<_>>();
 
-    v.shuffle(&mut rand::thread_rng());
+    v.shuffle(&mut our_rng());
 
     v
 }
@@ -811,7 +854,7 @@ pub fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], tem
 
 pub fn do_opt_rand_start(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>,
                          tabu: &HashSet<(usize, usize)>, min_k: usize) -> Option<(Tour, f64)> {
-    let mut rng = rand::thread_rng();
+    let mut rng = our_rng();
 
     let start_path_pos = rng.gen_range(1, tour.get_path().len()-1);
     let mut start_vertex = tour.get_path()[start_path_pos];
@@ -821,7 +864,7 @@ pub fn do_opt_rand_start(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: 
 
 pub fn do_opt_start(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>,
                     tabu: &HashSet<(usize, usize)>, min_k: usize, mut start_vertex: usize, mut start_vertex2: usize) -> Option<(Tour, f64)> {
-    let mut rng = rand::thread_rng();
+    let mut rng = our_rng();
 
     if rng.gen_range(0, 2) == 0 {
         let tmp = start_vertex;
@@ -986,7 +1029,7 @@ pub fn do_opt_start(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64
                             }
                             added_sum -= dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
                             removed_sum -= dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
-                        } else if cycles == 3 && rand::thread_rng().gen_range(0, 5) == 0 {
+                        } else if cycles == 3 && our_rng().gen_range(0, 5) == 0 {
                             removed_sum += dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
                             added_sum += dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
                             if let Some(r) = patch3(tour, candidates, pi, temp, base_limit, log_prefix, added, removed,  cycle_parts, added_sum, removed_sum) {
@@ -994,7 +1037,7 @@ pub fn do_opt_start(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64
                             }
                             added_sum -= dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
                             removed_sum -= dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
-                        } else if cycles >= 4 && cycles <= 10 && rand::thread_rng().gen_range(0, 7) == 0 {
+                        } else if cycles >= 4 && cycles <= 10 && our_rng().gen_range(0, 7) == 0 {
                             removed_sum += dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
                             added_sum += dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
                             if let Some(r) = patch3(tour, candidates,  pi,temp, base_limit, log_prefix, added, removed,  cycle_parts, added_sum, removed_sum) {
@@ -1058,7 +1101,7 @@ pub fn do_opt_start(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64
 
 // Only 2 and 2.5 opt2
 pub fn do_opt_all2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, mut start_vertex: usize, mut start_vertex2: usize, max_k: usize, mut added_sum: f64, mut removed_sum: f64) -> Option<Tour> {
-    let mut rng = rand::thread_rng();
+    let mut rng = our_rng();
 
     let cand_buf = candidates[start_vertex].iter().filter(|&&(c, d)| d + pi[start_vertex] + pi[c] <= removed_sum - added_sum + base_limit).map(|&x| x.0).collect::<Vec<_>>();
 
@@ -1173,7 +1216,7 @@ fn fix_it(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_li
         let mut start_vertex = tour.get_path()[i];
         let mut start_vertex2 = tour.get_path()[i+1];
 
-        if rand::thread_rng().gen_range(0, 2) == 0 {
+        if our_rng().gen_range(0, 2) == 0 {
             let tmp = start_vertex;
             start_vertex = start_vertex2;
             start_vertex2 = tmp;
