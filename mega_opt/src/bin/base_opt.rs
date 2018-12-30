@@ -84,7 +84,7 @@ const opt_configs: [(f64, f64, f64, usize, f64, usize, usize); n_configs] = [
 fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
     let (bp, ls, lms, iters, temp, min_k, tabus) = opt_configs[thread_id % n_configs];
 
-    let mut rng = rand::thread_rng();
+    let mut rng = our_rng();
 
     //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty, length_slope: 0.01, length_min_slope: 10.0 });
     //let mut cur_tour = tour.change_penalty(PenaltyConfig { base_penalty: tour.get_penalty_config().base_penalty * bp, length_slope: ls, length_min_slope: lms, ..Default::default() });
@@ -200,7 +200,7 @@ fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f
         return do_opt_alter_hash(tour, candidates, pi, prefix, base_limit, thread_id);
     }*/
 
-    let mut rng = rand::thread_rng();
+    let mut rng = our_rng();
     let mut added_v = vec!();
     let mut removed_v = vec!();
     let mut cand_buf = Vec::new();
@@ -372,7 +372,7 @@ const opt_heavy_configs: [(usize, f64); n_heavy_configs] = [
 
 fn do_opt2b(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefix: &str, base_limit: f64, thread_id: usize) -> Option<Tour> {
     let (swap_count, max_decr) = opt_heavy_configs[thread_id % n_heavy_configs];
-    let mut rng = rand::thread_rng();
+    let mut rng = our_rng();
 
     let mut cur_tour = tour.clone();
 
@@ -601,10 +601,14 @@ struct Config {
     #[structopt(short = "bm", long = "bad-mods", default_value = "0.0")]
     bad_mods: f64,
 
+    #[structopt(short = "seed", long = "seed", default_value = "4723")]
+    base_seed: u64,
+
 }
 
 fn main() {
     let opt = Config::from_args();
+    let base_seed = opt.base_seed;
 
     let nodes = Arc::new(load_poses());
 
@@ -660,7 +664,9 @@ fn main() {
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
         let base_limit = opt.base_limit;
         let our_pi = pi.clone();
+        let seed = base_seed + thread_id as u64;
         let handle = thread::spawn(move || {
+            seed_rng(seed);
             /*thread::sleep(time::Duration::new(180, 0));*/
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
@@ -709,7 +715,9 @@ fn main() {
         let prefix = opt.save_to.clone();
         let base_limit = opt.base_limit;
         let our_pi = pi.clone();
+        let seed = base_seed + thread_id as u64;
         let handle = thread::spawn(move || {
+            seed_rng(seed);
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
@@ -754,7 +762,9 @@ fn main() {
         let prefix = format!("{}-tmp-{}", opt.save_to.clone(), thread_id);
         let base_limit = opt.base_limit;
         let our_pi = pi.clone();
+        let seed = base_seed + thread_id as u64;
         let handle = thread::spawn(move || {
+            seed_rng(seed);
             /*thread::sleep(time::Duration::new(90, 0));*/
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();

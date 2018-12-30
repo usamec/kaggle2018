@@ -320,6 +320,9 @@ fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f
     let prefix4b = format!("break-{}({})-{}b", thread_id, thread_id % n_local_configs, 1.0);
     println!("break-{} go fin {}", thread_id, perm.len());
     perm.shuffle(&mut rng);
+    if cur_tour.get_path() == tour.get_path() {
+        return None
+    }
     loop {
         let sp = cur_tour.get_inv()[perm[cc % perm.len()]];
         if sp >= cur_tour.get_path().len() - 1 || sp <= 1 {
@@ -327,6 +330,9 @@ fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f
             continue;
         }
         if let Some(new_tour) = do_opt_all(&mut cur_tour, candidates, pi, base_limit, &prefix4b, &mut added_v, &mut removed_v, &mut cand_buf, sp) {
+            if new_tour.get_path() == tour.get_path() {
+                return None
+            }
             cur_tour = new_tour;
             /*if cur_tour.get_len() < tour.get_len() {
                 break;
@@ -709,7 +715,7 @@ fn main() {
             let mut removed_v = vec!();
             let mut cand_buf = vec!();
             loop {
-                if let Some((new_tour, pr)) = do_opt(&mut our_tour, &our_candidates, &our_pi, temp, base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
+                if let Some((new_tour, pr)) = do_opt(&mut our_tour, &our_candidates, &our_pi, temp, if thread_id == 0 { base_limit } else { base_limit / 2.0 }, "", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), 0) {
                     {
                         let mut main_tour = main_tour_mutex.lock().unwrap();
                         if new_tour.get_len() < main_tour.get_len() || (temp > 0.0 && ((main_tour.get_len() - new_tour.get_len()) / temp).exp() > pr) {
@@ -739,6 +745,7 @@ fn main() {
         handles.push(handle);
     }
 
+    let first_weak_thread = opt.n_threads + opt.n_heavy_threads;
     for thread_id in opt.n_threads + opt.n_heavy_threads..opt.n_threads + opt.n_heavy_threads + opt.n_weak_threads {
         let main_tour_mutex = Arc::clone(&tour);
         let main_tour_hash = Arc::clone(&tour_hash);
@@ -754,7 +761,7 @@ fn main() {
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             loop {
-                if let Some(new_tour_base) = do_opt_break_local(&mut our_tour, &our_candidates, &our_pi, &prefix, base_limit, thread_id) {
+                if let Some(new_tour_base) = do_opt_break_local(&mut our_tour, &our_candidates, &our_pi, &prefix, if thread_id == first_weak_thread { base_limit } else { base_limit / 2.0 }, thread_id) {
                     //println!("new len {}", new_tour.get_len());
                     {
                         let main_tour = main_tour_mutex.lock().unwrap().clone();
