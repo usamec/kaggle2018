@@ -51,7 +51,7 @@ impl TwoEdges {
         } else if self.edges[1] == node {
             self.edges[1] = NOEDGE;
         } else {
-            panic!("edge not found");
+            panic!("edge not found {}", node);
         }
     }
 

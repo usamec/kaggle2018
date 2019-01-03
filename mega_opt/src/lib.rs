@@ -40,14 +40,15 @@ pub struct PenaltyConfig {
     pub x_max: f64,
     pub y_min: f64,
     pub y_max: f64,
-    pub bad_mods: [f64; 10]
+    pub bad_mods: [f64; 10],
+    pub first_k: usize,
 }
 
 impl Default for PenaltyConfig {
     fn default() -> Self {
         PenaltyConfig { base_penalty: 0.1, length_slope: 0.0, length_min_slope: 0.0, big_cutoff: 50.0, max_penalty_bonus: 0.0, hash_mod: 1, hash_range: 1,
                         x_min: -10000.0, x_max: 10000.0, y_min: -10000.0, y_max: 10000.0,
-                        bad_mods: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}
+                        bad_mods: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], first_k: 1_000_000_000}
     }
 }
 
@@ -170,7 +171,8 @@ pub fn get_primes(limit: usize) -> Vec<bool> {
 }
 
 pub fn get_penalty(current_len: f64, cur_pos: usize, cur_node: usize, primes: &[bool], nodes: &[(f64, f64)], penalty_config: PenaltyConfig) -> f64 {
-    if penalty_config.bad_mods[cur_pos % 10] > 0.0 && !primes[cur_node] && nodes[cur_node].0 < penalty_config.x_max && nodes[cur_node].0 > penalty_config.x_min && nodes[cur_node].1 < penalty_config.y_max && nodes[cur_node].1 > penalty_config.y_min {
+    if penalty_config.bad_mods[cur_pos % 10] > 0.0 && !primes[cur_node] && nodes[cur_node].0 < penalty_config.x_max && nodes[cur_node].0 > penalty_config.x_min && nodes[cur_node].1 < penalty_config.y_max && nodes[cur_node].1 > penalty_config.y_min &&
+       cur_pos < penalty_config.first_k {
         let good = penalty_config.hash_mod == 1 || {
             let mut s = DefaultHasher::new();
             ((nodes[cur_node].0 / 10.0) as i32).hash(&mut s);
@@ -226,6 +228,20 @@ pub fn calculate_len(nodes: &[(f64, f64)], tour: &[usize], primes: &[bool], offs
 
 fn patch3(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, mut all_cycle_parts: Vec<Vec<(usize, usize)>>, mut added_sum: f64, mut removed_sum: f64) -> Option<(Tour, f64)> {
     all_cycle_parts.shuffle(&mut our_rng());
+
+    {
+        let cycle_parts = &mut all_cycle_parts[0];
+        cycle_parts.iter_mut().for_each(|p| {
+            *p = (p.0.min(p.1), p.0.max(p.1))
+        });
+    }
+
+    {
+        let cycle_parts = &mut all_cycle_parts[0];
+        cycle_parts.iter_mut().for_each(|p| {
+            *p = (p.0.min(p.1), p.0.max(p.1))
+        });
+    }
     let cycle_parts = &all_cycle_parts[0];
     let cycle_partsb = &all_cycle_parts[1];
 
@@ -506,6 +522,24 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f6
         *p = (p.0.min(p.1), p.0.max(p.1))
     });
 
+/*    if added.len() == 2 {
+
+        let cp0 = cycle_parts[0];
+        //println!("cp {:?}", cp0);
+        if cp0.1 > cp0.0 + 1 {
+            let current_penalty = tour.get_dist_offset(cp0.0, cp0.1, cp0.0);
+            let best_penalty = (0..10).fold(current_penalty, |cur_pen, offset| {
+                cur_pen.min(tour.get_dist_offset(cp0.0, cp0.1, offset)).min(tour.get_dist_offset(cp0.1, cp0.0, offset))
+            });
+
+            //println!("df {}", current_penalty - best_penalty);
+            if current_penalty - best_penalty < added_sum - removed_sum {
+                return None;
+            }
+        }
+        //println!("booo {:?}", cycle_parts);
+    }*/
+
     /*if cycle_parts.len() > 1 {
         return None;
     }*/
@@ -515,9 +549,9 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f6
     }
 
     for cp in &cycle_parts {
-        if cp.1 - cp.0 < 3 {
+        /*if cp.1 - cp.0 < 3 {
             continue
-        }
+        }*/
         for s in cp.0..cp.1 {
             let v1 = tour.get_path()[s];
             let v2 = tour.get_path()[s + 1];
@@ -560,6 +594,9 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f6
                                     let (_res, p) = tour.test_changes(&added, &removed).unwrap();
                                     let new_tour = tour.make_new(p, );
                                     println!("{}accept nonseq {} real {}, added len {} a - r {} {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
+                                    if added.len() == 4 {
+                                        println!("cp {:?}", cp);
+                                    }
                                     return Some((new_tour, pr));
                                 }  else if added.len() <= 6 && len < tour.get_len() + 2.0 {
                                     //println!("maybe fix {} {}", len - tour.get_len(), added_sum - removed_sum);
@@ -1011,42 +1048,39 @@ pub fn do_opt_start(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64
                     let mut good = true;
 
                     added.push((current_vertex, start_vertex2));
-                    let (cycles, cycle_parts) = tour.count_cycles(&added, &removed);
-                    let left = k - i - 1;
-                    if cycles > left + 1 && cycles < 1_000_000 {
-                        good = false;
-                    }
-                    /*if added.len() % 6 == 0 && cycles != 1 {
-                        good = false;
-                    }*/
+                    removed_sum += dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
+                    added_sum += dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
 
-                    if added.len() + 1 >= min_k {
-                        if cycles == 2 {
-                            removed_sum += dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
-                            added_sum += dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
-                            if let Some(r) = patch(tour, candidates, pi, temp, base_limit, log_prefix, added, removed,  cycle_parts, added_sum, removed_sum) {
-                                return Some(r);
+                    if added_sum - removed_sum < base_limit {
+                        let (cycles, cycle_parts) = tour.count_cycles(&added, &removed);
+                        let left = k - i - 1;
+                        if cycles > left + 1 && cycles < 1_000_000 {
+                            good = false;
+                        }
+                        /*if added.len() % 6 == 0 && cycles != 1 {
+                            good = false;
+                        }*/
+
+                        if added.len() + 1 >= min_k {
+                            if cycles == 2 {
+                                if let Some(r) = patch(tour, candidates, pi, temp, base_limit, log_prefix, added, removed, cycle_parts, added_sum, removed_sum) {
+                                    return Some(r);
+                                }
+                            } else if cycles == 3 && our_rng().gen_range(0, 5) == 0 {
+                                if let Some(r) = patch3(tour, candidates, pi, temp, base_limit, log_prefix, added, removed, cycle_parts, added_sum, removed_sum) {
+                                    println!("patched {} cycles", cycles);
+                                    return Some(r);
+                                }
+                            } else if cycles >= 4 && cycles <= 10 && our_rng().gen_range(0, 20) == 0 {
+                                if let Some(r) = patch3(tour, candidates, pi, temp, base_limit, log_prefix, added, removed, cycle_parts, added_sum, removed_sum) {
+                                    println!("patched {} cycles", cycles);
+                                    return Some(r);
+                                }
                             }
-                            added_sum -= dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
-                            removed_sum -= dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
-                        } else if cycles == 3 && our_rng().gen_range(0, 5) == 0 {
-                            removed_sum += dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
-                            added_sum += dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
-                            if let Some(r) = patch3(tour, candidates, pi, temp, base_limit, log_prefix, added, removed,  cycle_parts, added_sum, removed_sum) {
-                                return Some(r);
-                            }
-                            added_sum -= dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
-                            removed_sum -= dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
-                        } else if cycles >= 4 && cycles <= 10 && our_rng().gen_range(0, 7) == 0 {
-                            removed_sum += dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
-                            added_sum += dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
-                            if let Some(r) = patch3(tour, candidates,  pi,temp, base_limit, log_prefix, added, removed,  cycle_parts, added_sum, removed_sum) {
-                                return Some(r);
-                            }
-                            added_sum -= dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
-                            removed_sum -= dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
                         }
                     }
+                    added_sum -= dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
+                    removed_sum -= dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
 
                     added.pop();
 
@@ -1104,6 +1138,7 @@ pub fn do_opt_all2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64]
     let mut rng = our_rng();
 
     let cand_buf = candidates[start_vertex].iter().filter(|&&(c, d)| d + pi[start_vertex] + pi[c] <= removed_sum - added_sum + base_limit).map(|&x| x.0).collect::<Vec<_>>();
+    let cand_buf2 = candidates[start_vertex2].iter().filter(|&&(c, d)| d + pi[start_vertex] + pi[c] <= removed_sum - added_sum + base_limit).map(|&x| x.0).collect::<Vec<_>>();
 
     for &next_vertex in cand_buf.iter() {
         if next_vertex == 0 || removed.contains(&(start_vertex, next_vertex)) || removed.contains(&(next_vertex, start_vertex)) ||
@@ -1188,6 +1223,63 @@ pub fn do_opt_all2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64]
             removed.pop();
             removed.pop();
         }
+
+        //3 opt
+        for &next_vertex2 in cand_buf2.iter() {
+            if next_vertex2 == 0 || removed.contains(&(start_vertex2, next_vertex2)) || removed.contains(&(next_vertex2, start_vertex2)) ||
+                added.contains(&(start_vertex2, next_vertex2)) || added.contains(&(next_vertex2, start_vertex2)){
+                continue;
+            }
+            let next_vertex2_pos = tour.get_inv()[next_vertex2];
+            if next_vertex2_pos > next_vertex_pos + 1 {
+                let next_vertexb = tour.get_path()[next_vertex_pos-1];
+                let next_vertex2b = tour.get_path()[next_vertex2_pos+1];
+
+                added.push((start_vertex2, next_vertex2));
+                added.push((next_vertexb, next_vertex2b));
+
+                added_sum += dist_pi(&pi, &tour.nodes, start_vertex2, next_vertex2);
+                added_sum += dist_pi(&pi, &tour.nodes, next_vertexb, next_vertex2b);
+
+                removed.push((next_vertex, next_vertexb));
+                removed.push((next_vertex2, next_vertex2b));
+
+                removed_sum += dist_pi(&pi, &tour.nodes, next_vertex, next_vertexb);
+                removed_sum += dist_pi(&pi, &tour.nodes, next_vertex2, next_vertex2b);
+
+                if added_sum - removed_sum < base_limit {
+                    let test_fast = tour.test_changes_fast(&added, &removed);
+
+                    if let Some(len) = test_fast {
+                        let pr = rng.gen::<f64>();
+                        if len < tour.get_len() {
+                            let (_res, p) = tour.test_changes(&added, &removed).unwrap();
+                            let new_tour = tour.make_new(p, );
+
+                            println!("{}acceptf3 {} real {}, added len {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len());
+                            stdout().flush();
+                            return Some(new_tour);
+                        } /*else {
+                            println!("3f longer {} {}", len, tour.get_len());
+                        }*/
+                    }
+                }
+
+                added_sum -= dist_pi(&pi, &tour.nodes, start_vertex2, next_vertex2);
+                added_sum -= dist_pi(&pi, &tour.nodes, next_vertexb, next_vertex2b);
+
+                removed_sum -= dist_pi(&pi, &tour.nodes, next_vertex, next_vertexb);
+                removed_sum -= dist_pi(&pi, &tour.nodes, next_vertex2, next_vertex2b);
+
+                added.pop();
+                added.pop();
+
+                removed.pop();
+                removed.pop();
+            }
+
+        }
+
 
         added_sum -= dist_pi(&pi, &tour.nodes, start_vertex, next_vertex);
         added.pop();
