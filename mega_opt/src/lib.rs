@@ -566,12 +566,16 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f6
                     continue
                 }
                 for &(c2, _) in &candidates[v2] {
-                    if c2 == v1 {
+                    if c2 == v1 || c2 == c1 {
                         continue;
                     }
 
                     let i2 = tour.get_inv()[c2];
                     if cycle_parts.iter().any(|cpx| i2 > cpx.0 && i2 < cpx.1) {
+                        continue
+                    }
+
+                    if c1 == 0 || c2 == 0 {
                         continue
                     }
 
@@ -598,7 +602,7 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f6
                                         println!("cp {:?}", cp);
                                     }
                                     return Some((new_tour, pr));
-                                }  else if added.len() <= 6 && len < tour.get_len() + 2.0 {
+                                }  else if added.len() <= 6 && len < tour.get_len() + 10.0 * tour.get_penalty_config().base_penalty {
                                     //println!("maybe fix {} {}", len - tour.get_len(), added_sum - removed_sum);
                                     if let Some(res) = fix_it(tour, candidates, pi, base_limit, log_prefix, added, removed, added_sum, removed_sum) {
                                         //println!("founf fix {}", len - tour.get_len());
@@ -615,6 +619,64 @@ fn patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f6
                         removed_sum -= dist_pi(&pi, &tour.nodes, c2, c1);
                         added.pop();
                         added.pop();
+                        removed.pop();
+                        removed.pop();
+                    } else { // 3 opt
+                        added.push((v1, c1));
+                        added_sum += dist_pi(&pi, &tour.nodes, v1, c1);
+                        added.push((v2, c2));
+                        added_sum += dist_pi(&pi, &tour.nodes, v2, c2);
+                        removed.push((v1, v2));
+                        removed_sum += dist_pi(&pi, &tour.nodes, v1, v2);
+                        /*removed.push((c2, c1));
+                        removed_sum += dist_pi(&pi, &tour.nodes, c2, c1);*/
+
+                        let cc1 = tour.get_path()[i1+1];
+                        let cc2 = tour.get_path()[i2+1];
+
+                        removed.push((cc1, c1));
+                        removed_sum += dist_pi(&pi, &tour.nodes, cc1, c1);
+
+                        removed.push((cc2, c2));
+                        removed_sum += dist_pi(&pi, &tour.nodes, cc2, c2);
+
+                        added.push((cc1, cc2));
+                        added_sum += dist_pi(&pi, &tour.nodes, cc2, cc1);
+
+                        if added_sum - removed_sum < base_limit {
+                            let test_fast = tour.test_changes_fast(&added, &removed);
+                            //println!("ns23 {:?} {} {} {:?} {:?}", test_fast, i1, i2, added, removed);
+                            if let Some(len) = test_fast {
+                                let pr = our_rng().gen::<f64>();
+                                if len < tour.get_len() + temp.min(0.0) || (temp > 0.0 && ((tour.get_len() - len) / temp).exp() > pr){
+                                    let (_res, p) = tour.test_changes(&added, &removed).unwrap();
+                                    let new_tour = tour.make_new(p, );
+                                    println!("{}accept nonseq23 {} real {}, added len {} a - r {} {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
+                                    if added.len() == 4 {
+                                        println!("cp {:?}", cp);
+                                    }
+                                    return Some((new_tour, pr));
+                                }  else if added.len() <= 6 && len < tour.get_len() + 10.0 * tour.get_penalty_config().base_penalty {
+                                    //println!("maybe fix {} {}", len - tour.get_len(), added_sum - removed_sum);
+                                    if let Some(res) = fix_it(tour, candidates, pi, base_limit, log_prefix, added, removed, added_sum, removed_sum) {
+                                        //println!("founf fix {}", len - tour.get_len());
+                                        return Some(res);
+                                    }
+                                    //println!("inner longer {} {} {}", added.len(), len - tour.get_len(), added_sum - removed_sum);
+                                }
+                            }
+                        }
+
+                        added_sum -= dist_pi(&pi, &tour.nodes, v1, c1);
+                        added_sum -= dist_pi(&pi, &tour.nodes, v2, c2);
+                        removed_sum -= dist_pi(&pi, &tour.nodes, v1, v2);
+                        removed_sum -= dist_pi(&pi, &tour.nodes, cc1, c1);
+                        removed_sum -= dist_pi(&pi, &tour.nodes, cc2, c2);
+                        added_sum -= dist_pi(&pi, &tour.nodes, cc2, cc1);
+                        added.pop();
+                        added.pop();
+                        added.pop();
+                        removed.pop();
                         removed.pop();
                         removed.pop();
                     }
@@ -1291,7 +1353,6 @@ pub fn do_opt_all2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64]
 
 
 fn fix_it(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, mut added_sum: f64, mut removed_sum: f64) -> Option<(Tour, f64)> {
-    //return None;
     let mut removed_inds = removed.iter().map(|x| iter::once(tour.get_inv()[x.0]).chain(iter::once(tour.get_inv()[x.1]))).flatten().collect::<Vec<_>>();
     let min_removed = *removed_inds.iter().min().unwrap();
     let max_removed = *removed_inds.iter().max().unwrap();
