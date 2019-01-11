@@ -57,7 +57,10 @@ struct Config {
     save_timestamp: bool,
 
     #[structopt(short = "cf", long = "cand-file", default_value = "../inputs/cities.cand")]
-    cand_file: String
+    cand_file: String,
+
+    #[structopt(long = "max-k", default_value = "10")]
+    max_k: usize,
 }
 
 fn main() {
@@ -108,10 +111,13 @@ fn main() {
         }
     }*/
 
-    for i in 1..tour.get_path().len() - 1 {
-        let res = do_opt_all_limit(&mut tour, &candidates_w, &pi, opt.base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf, i, 10);
+    let mut perm = (1..tour.get_path().len() - 1).collect::<Vec<_>>();
+    perm.shuffle(&mut rand::thread_rng());
+
+    for i in 0..perm.len() {
+        let res = do_opt_all_limit(&mut tour, &candidates_w, &pi, opt.base_limit, "", &mut added_v, &mut removed_v, &mut cand_buf, perm[i], opt.max_k);
         if res.is_some() || i % 100 == 0 {
-            println!("{} {}", i, res.is_some());
+            println!("{} {} {}", i, res.is_some(), Local::now().format("%Y-%m-%dT%H:%M:%S"));
         }
         if let Some(new_tour) = res {
             if new_tour.get_len() < tour.get_len() {
@@ -159,7 +165,7 @@ fn fix_it(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_li
         removed.push((start_vertex, start_vertex2));
         removed_sum += dist_pi(&pi, &tour.nodes, start_vertex, start_vertex2);
 
-        if let Some(new_tour) = do_opt_all_inner(tour, candidates, pi, base_limit, log_prefix, added, removed, start_vertex, start_vertex2, 3, added_sum, removed_sum) {
+        if let Some(new_tour) = do_opt_all_inner(tour, candidates, pi, base_limit, log_prefix, added, removed, start_vertex, start_vertex2, 8, added_sum, removed_sum) {
             println!("found fix {} {}", new_tour.get_len(), tour.get_len());
             panic!("booo");
             return Some((new_tour, 0.0));

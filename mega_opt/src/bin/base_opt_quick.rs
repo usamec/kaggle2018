@@ -171,11 +171,11 @@ fn do_opt2p(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], prefi
     }
 }
 
-const n_local_configs: usize = 1;
+const n_local_configs: usize = 3;
 
 const opt_local_configs: [(bool, f64, usize, f64, usize, f64, usize, usize); n_local_configs] = [
-    /*(false, 0.1, 50_000, 2.5, 150_000, 0.8, 200_000,200_000),
-    (false, 3.0, 50_000, 2.0, 150_000, 1.2, 200_000,200_000),*/
+    (false, 0.1, 50_000, 2.5, 150_000, 0.8, 200_000,200_000),
+    (false, 3.0, 50_000, 2.0, 150_000, 1.2, 200_000,200_000),
     (false, 3.0, 50_000, 1.5, 10_000, 0.8, 0,200_000),
     /*(false, 3.0, 50_000, 1.5, 0, 0.8, 0,50_000),
     (false, 3.0, 100_000, 1.5, 0, 0.8, 0,100_000),*/
@@ -329,7 +329,7 @@ fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f
             cc += 1;
             continue;
         }
-        if let Some(new_tour) = do_opt_all(&mut cur_tour, candidates, pi, base_limit, &prefix4b, &mut added_v, &mut removed_v, &mut cand_buf, sp) {
+        /*if let Some(new_tour) = do_opt_all(&mut cur_tour, candidates, pi, base_limit, &prefix4b, &mut added_v, &mut removed_v, &mut cand_buf, sp) {
             if new_tour.get_path() == tour.get_path() {
                 return None
             }
@@ -337,6 +337,14 @@ fn do_opt_break_local(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f
             /*if cur_tour.get_len() < tour.get_len() {
                 break;
             }*/
+            last = cc;
+        }*/
+        /*if let Some(new_tour) = do_opt_all_limit(&mut cur_tour, candidates, pi, base_limit.min(1.0), &prefix4b, &mut added_v, &mut removed_v, &mut cand_buf, sp, 4) {
+            cur_tour = new_tour;
+            last = cc;
+        }*/
+        if let Some(new_tour) = do_opt_all_limit(&mut cur_tour, candidates, pi, 0.4, &prefix4b, &mut added_v, &mut removed_v, &mut cand_buf, sp, 5) {
+            cur_tour = new_tour;
             last = cc;
         }
         cc += 1;
@@ -592,6 +600,14 @@ struct Config {
     #[structopt(short = "seed", long = "seed", default_value = "4723")]
     base_seed: u64,
 
+    #[structopt(long = "push-min", default_value = "50000")]
+    push_min: usize,
+
+    #[structopt(long = "push-mod", default_value = "17")]
+    push_mod: usize,
+
+    #[structopt(long = "push-div", default_value = "1000000000")]
+    push_div: usize,
 }
 
 fn main() {
@@ -706,9 +722,13 @@ fn main() {
         let base_limit = opt.base_limit;
         let our_pi = pi.clone();
         let seed = base_seed + thread_id as u64;
+        let push_min = opt.push_min;
+        let push_mod = opt.push_mod;
+        let push_div = opt.push_div;
         let handle = thread::spawn(move || {
             seed_rng(seed);
-            let mut cc = 0;
+            let mut cc = 0usize;
+            let mut last = 0usize;
             let mut our_tour = main_tour_mutex.lock().unwrap().clone();
             let mut our_tour_hash = our_tour.hash();
             let mut added_v = vec!();
@@ -719,6 +739,7 @@ fn main() {
                     {
                         let mut main_tour = main_tour_mutex.lock().unwrap();
                         if new_tour.get_len() < main_tour.get_len() || (temp > 0.0 && ((main_tour.get_len() - new_tour.get_len()) / temp).exp() > pr) {
+                            last = cc;
                             our_tour = new_tour;
                             our_tour_hash = our_tour.hash();
 
@@ -730,7 +751,26 @@ fn main() {
                     //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
                 }
                 cc += 1;
-                if cc % 100000 == 0 {
+                if cc - last > push_min && cc % push_mod == 0 {
+                    let max_k = 8 + (cc - last - push_min) / push_div;
+                    let base_limit = 0.5 + 0.1 * ((cc - last - push_min) / push_div) as f64;
+                    if let Some((new_tour, pr)) = do_opt_push(&mut our_tour, &our_candidates, &our_pi, temp, if thread_id == 0 { base_limit } else { base_limit / 2.0 }, "", &mut added_v, &mut removed_v, &mut cand_buf, &HashSet::new(), max_k) {
+                        {
+                            let mut main_tour = main_tour_mutex.lock().unwrap();
+                            if new_tour.get_len() < main_tour.get_len() || (temp > 0.0 && ((main_tour.get_len() - new_tour.get_len()) / temp).exp() > pr) {
+                                last = cc;
+                                our_tour = new_tour;
+                                our_tour_hash = our_tour.hash();
+
+
+                                *main_tour = our_tour.clone();
+                                main_tour_hash.store(our_tour_hash, Ordering::Relaxed);
+                            }
+                        }
+                        //our_tour.save(&format!("{}-{}.csv", prefix, thread_id));
+                    }
+                }
+                if cc % (push_div / 100).min(100_000) == 0 {
                     println!("cc {} {} {}", cc, thread_id, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                 }
                 if main_tour_hash.load(Ordering::Relaxed) != our_tour_hash {

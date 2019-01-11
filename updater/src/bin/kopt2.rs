@@ -1088,14 +1088,14 @@ fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], temp: f64, base_lim
 }
 
 fn local_update<F>(size: usize, start: usize, temp: f64, nodes: &[(f64, f64)], current_tour: &[usize], cur_len: f64, primes: &[bool],
-                   inner: F) -> Option<(Vec<usize>, f64)>
-    where F: Fn(&mut [usize], &[(f64, f64)], &[bool], usize) -> bool {
+                   candidates: &[Vec<usize>], inner: F) -> Option<(Vec<usize>, f64)>
+    where F: Fn(&mut [usize], &[(f64, f64)], &[bool], &[Vec<usize>], usize) -> bool {
     let end = start + size;
 
     let mut slice_and_padding = current_tour[start - 1..end + 1].to_owned();
     let old_len = calculate_len(&nodes, &slice_and_padding, &primes, start - 1);
     let mut rng = rand::thread_rng();
-    if inner(&mut slice_and_padding, &nodes, &primes, start - 1) {
+    if inner(&mut slice_and_padding, &nodes, &primes, candidates, start - 1) {
         let new_len = calculate_len(&nodes, &slice_and_padding, &primes, start - 1);
         if new_len < old_len || (temp > 0.0 && ((old_len - new_len) / temp).exp() > rng.gen::<f64>()) {
             println!("boom {} {} {} {}", old_len, new_len, old_len - new_len, size);
@@ -1358,15 +1358,16 @@ fn main() {
         let our_nodes = nodes.clone();
         let our_primes = primes.clone();
         let main_tour_hash = Arc::clone(&tour_hash);
+        let cands = candidates.clone();
         let handle = thread::spawn(move || {
             let mut cc = 0;
             let mut our_tour = main_tour_mutex.lock().unwrap().get_path().to_vec();
             let (mut cur_len, mut cur_real_len) = verify_and_calculate_len(&our_nodes, &our_tour, &our_primes);
             let mut rng = rand::thread_rng();
             loop {
-                let size = rng.gen_range(20, 41);
+                let size = rng.gen_range(50, 51);
                 let start = rng.gen_range(1, our_tour.len() - size - 1);
-                let maybe_new_tour = local_update(size, start, 0.0, &our_nodes, &our_tour, cur_len, &our_primes, full_optim);
+                let maybe_new_tour = local_update(size, start, 0.0, &our_nodes, &our_tour, cur_len, &our_primes, &cands, full_optim);
                 if let Some((new_tour, new_len)) = maybe_new_tour {
                     println!("better brute {} {}", cur_len, new_len);
                     {
@@ -1386,7 +1387,7 @@ fn main() {
                 let (ccur_len, ccur_real_len) = verify_and_calculate_len(&our_nodes, &our_tour, &our_primes);
                 cur_len = ccur_len;
                 cur_real_len = ccur_real_len;
-                println!("ccb {}", cc);
+                println!("ccb {} {} {} {}", cc, thread_id, size, Local::now().format("%Y-%m-%dT%H:%M:%S"));
             }
         });
         handles.push(handle);

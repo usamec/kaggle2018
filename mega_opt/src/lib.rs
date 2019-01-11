@@ -42,13 +42,14 @@ pub struct PenaltyConfig {
     pub y_max: f64,
     pub bad_mods: [f64; 10],
     pub first_k: usize,
+    pub min_coverage: usize
 }
 
 impl Default for PenaltyConfig {
     fn default() -> Self {
         PenaltyConfig { base_penalty: 0.1, length_slope: 0.0, length_min_slope: 0.0, big_cutoff: 50.0, max_penalty_bonus: 0.0, hash_mod: 1, hash_range: 1,
                         x_min: -10000.0, x_max: 10000.0, y_min: -10000.0, y_max: 10000.0,
-                        bad_mods: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], first_k: 1_000_000_000}
+                        bad_mods: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], first_k: 1_000_000_000, min_coverage: 0}
     }
 }
 
@@ -733,11 +734,11 @@ pub fn do_opt_all_inner(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &
             if let Some(r) = patch(tour, candidates, pi, temp, base_limit, log_prefix, added, removed, cycle_parts, added_sum, removed_sum) {
                 return Some(r.0);
             }
-        }/* else if cycles == 3 && our_rng().gen_range(0, 10) == 0 {
+        } else if cycles == 3 {
             if let Some(r) = patch3(tour, candidates, pi, temp, base_limit, log_prefix, added, removed, cycle_parts, added_sum, removed_sum) {
                 return Some(r.0);
             }
-        } else if cycles >= 4 && cycles <= 10 && our_rng().gen_range(0, 10) == 0 {
+        } /*else if cycles >= 4 && cycles <= 10 {
             if let Some(r) = patch3(tour, candidates,  pi,temp, base_limit, log_prefix, added, removed, cycle_parts, added_sum, removed_sum) {
                 return Some(r.0);
             }
@@ -948,7 +949,38 @@ pub fn do_opt(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], tem
         }
     });
 
-    do_opt_start(tour, candidates, pi, temp, base_limit, log_prefix, added, removed, cand_buf, tabu, min_k, start_vertex, start_vertex2)
+/*    if our_rng().gen_range(0, 20) == 0 {
+        do_opt_all_limit(tour, candidates, pi, (base_limit / 2.0).min(0.5), log_prefix, added, removed, cand_buf, start_path_pos, 8).map(|t| (t, 0.0))
+    } else*/ {
+        do_opt_start(tour, candidates, pi, temp, base_limit, log_prefix, added, removed, cand_buf, tabu, min_k, start_vertex, start_vertex2)
+    }
+}
+
+pub fn do_opt_push(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>,
+              tabu: &HashSet<(usize, usize)>, max_k: usize) -> Option<(Tour, f64)> {
+    /*let start_path_pos = rng.gen_range(1, tour.get_path().len() - 1);*/
+    let order_ind: usize = opt_start_v.with(|sv| {
+        *sv.borrow()
+    });
+
+    let start_path_pos = opt_start_order.with(|ord| {
+        ord.borrow()[order_ind]
+    });
+
+    let ord_len = opt_start_order.with(|ord| {
+        ord.borrow().len()
+    });
+    let mut start_vertex = tour.get_path()[start_path_pos];
+    let mut start_vertex2 = tour.get_path()[(start_path_pos) + 1];
+    opt_start_v.with(|sv| {
+        let mut start_pos = sv.borrow_mut();
+        *start_pos += 1;
+        if *start_pos == ord_len {
+            *start_pos = 0;
+        }
+    });
+
+    do_opt_all_limit(tour, candidates, pi, base_limit, log_prefix, added, removed, cand_buf, start_path_pos, max_k).map(|t| (t, 0.0))
 }
 
 pub fn do_opt_rand_start(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], temp: f64, base_limit: f64, log_prefix: &str, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, cand_buf: &mut Vec<usize>,
@@ -1268,7 +1300,7 @@ pub fn do_opt_all2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64]
                         let (_res, p) = tour.test_changes(&added, &removed).unwrap();
                         let new_tour = tour.make_new(p, );
 
-                        println!("{}acceptf2.5a {} real {}, added len {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len());
+                        println!("{}acceptf2.5a {} real {}, added len {} added - removed {} {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                         stdout().flush();
                         return Some(new_tour);
                     }
@@ -1318,7 +1350,7 @@ pub fn do_opt_all2(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64]
                             let (_res, p) = tour.test_changes(&added, &removed).unwrap();
                             let new_tour = tour.make_new(p, );
 
-                            println!("{}acceptf3 {} real {}, added len {}", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len());
+                            println!("{}acceptf3 {} real {}, added len {} added - removed {} {} ", log_prefix, new_tour.get_len(), new_tour.get_real_len(), added.len(), added_sum - removed_sum, Local::now().format("%Y-%m-%dT%H:%M:%S"));
                             stdout().flush();
                             return Some(new_tour);
                         } /*else {

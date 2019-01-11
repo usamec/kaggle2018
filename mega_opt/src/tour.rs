@@ -484,12 +484,15 @@ impl Tour {
 
     }*/
 
-    pub fn test_changes_fast(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> Option<f64> {
+    pub fn total_shift(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> Option<usize> {
         if !Tour::check_duplicates(added, removed) {
 
             let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
             let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
             removed_inds.sort_unstable();
+            if removed_inds.last().unwrap() - removed_inds[0] < self.penalty_config.min_coverage {
+                return None;
+            }
             /*println!("rem {:?}", removed);
             println!("add {:?}", added);
             println!("rid {:?}", removed_inds);
@@ -499,6 +502,7 @@ impl Tour {
             let mut used_added = added_inds.iter().map(|_| false).collect::<Vec<_>>();
 
             let mut total_len = 0.0f64;
+            let mut total_shift = 0;
             let mut current = removed_inds[0];
             total_len += self.get_dist_offset(0, removed_inds[0], 0);
             let mut cur_offset = removed_inds[0];
@@ -536,6 +540,13 @@ impl Tour {
                     current = removed_inds[next_pos - 1];
                 }
 
+                if next < current {
+                    if cur_offset % 10 != next % 10 {
+                        total_shift += current - next;
+                    }
+                } else {
+                    total_shift += next - current;
+                }
                 total_len += self.get_dist_offset(next, current, cur_offset);
                 cur_offset += (next as i32 - current as i32).abs() as usize;
                 cur_offset %= 10;
@@ -543,7 +554,96 @@ impl Tour {
             total_len += self.get_dist_offset(*removed_inds.last().unwrap(), self.path.len()-1, cur_offset);
             //println!("{:?}", used_added);
             if used_added.iter().all(|&x| x) {
-                Some(total_len)
+                if total_len < self.get_len() {
+                    //println!("impr {} in area {}", self.get_len() - total_len, removed_inds.last().unwrap() - removed_inds[0]);
+                }
+                Some(total_shift)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn test_changes_fast(&self, added: &[(usize, usize)], removed: &[(usize, usize)]) -> Option<f64> {
+        if !Tour::check_duplicates(added, removed) {
+
+            let mut removed_inds = removed.iter().map(|x| iter::once(self.inv[x.0]).chain(iter::once(self.inv[x.1]))).flatten().collect::<Vec<_>>();
+            let added_inds = added.iter().map(|x| (self.inv[x.0], self.inv[x.1])).collect::<Vec<_>>();
+            removed_inds.sort_unstable();
+            if removed_inds.last().unwrap() - removed_inds[0] < self.penalty_config.min_coverage {
+                return None;
+            }
+            /*println!("rem {:?}", removed);
+            println!("add {:?}", added);
+            println!("rid {:?}", removed_inds);
+            println!("aid {:?}", added_inds);*/
+
+
+            let mut used_added = added_inds.iter().map(|_| false).collect::<Vec<_>>();
+
+            let mut total_len = 0.0f64;
+            let mut total_shift = 0;
+            let mut current = removed_inds[0];
+            total_len += self.get_dist_offset(0, removed_inds[0], 0);
+            let mut cur_offset = removed_inds[0];
+            cur_offset %= 10;
+            loop {
+                //println!("current {}", current);
+                let added_pos = added_inds.iter().enumerate().find_map(|(i, x)| if (x.0 == current || x.1 == current) && used_added[i] == false { Some(i) } else { None }).unwrap();
+                used_added[added_pos] = true;
+                let next = if added_inds[added_pos].0 == current {
+                    added_inds[added_pos].1
+                } else {
+                    added_inds[added_pos].0
+                };
+
+                let mut current_len = dist(self.nodes[added[added_pos].0], self.nodes[added[added_pos].1]);
+                current_len += get_penalty(current_len, 1 + cur_offset, self.path[current], &self.primes, &self.nodes, self.penalty_config);
+                total_len += current_len;
+                cur_offset += 1;
+                cur_offset %= 10;
+
+                let next_pos = removed_inds.iter().enumerate().find_map(|(i, &x)| if x == next { Some(i) } else { None }).unwrap();
+                if next_pos == removed_inds.len() - 1 {
+                    break;
+                }
+                if next_pos == 0 {
+                    println!("rem {:?}", removed);
+                    println!("add {:?}", added);
+                    println!("rid {:?}", removed_inds);
+                    println!("aid {:?}", added_inds);
+                }
+                assert!(next_pos != 0);
+                if next_pos % 2 == 1 {
+                    current = removed_inds[next_pos + 1];
+                } else {
+                    current = removed_inds[next_pos - 1];
+                }
+
+                if next < current {
+                    if cur_offset % 10 != next % 10 {
+                        total_shift += current - next;
+                    }
+                } else {
+                    total_shift += next - current;
+                }
+                total_len += self.get_dist_offset(next, current, cur_offset);
+                cur_offset += (next as i32 - current as i32).abs() as usize;
+                cur_offset %= 10;
+            }
+            total_len += self.get_dist_offset(*removed_inds.last().unwrap(), self.path.len()-1, cur_offset);
+            //println!("{:?}", used_added);
+            if used_added.iter().all(|&x| x) {
+                if total_len < self.get_len() {
+                    //println!("impr {} in area {}", self.get_len() - total_len, removed_inds.last().unwrap() - removed_inds[0]);
+                }
+                if total_shift > self.penalty_config.min_coverage {
+                    Some(total_len)
+                } else {
+                    None
+                }
             } else {
                 None
             }

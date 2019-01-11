@@ -33,7 +33,7 @@ fn get_lower_bound(cur: usize, left: &[usize], target: usize, nodes: &[(f64,f64)
     total
 }
 
-fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usize, nodes: &[(f64,f64)], primes: &[bool], upper_bound: f64) -> (Option<(Vec<usize>, f64)>, usize) {
+fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usize, nodes: &[(f64,f64)], primes: &[bool], candidates: &[Vec<usize>], upper_bound: f64) -> (Option<(Vec<usize>, f64)>, usize) {
     if upper_bound < get_lower_bound(cur, &left, target, nodes) {
         (None, 1)
     } else {
@@ -48,10 +48,13 @@ fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usi
             let mut rng = rand::thread_rng();
             left.shuffle(&mut rng);
             for &next in left.iter() {
+                if !candidates[cur].contains(&next) {
+                    continue;
+                }
                 let mut current_len = dist(nodes[cur], nodes[next]);
                 current_len += get_penalty(current_len, offset + 1, cur, primes);
                 let mut left2 = left.iter().filter(|&&x| x != next).map(|x| *x).collect::<Vec<_>>();
-                let (maybe_res, steps) = full_optim_inner(next, left2, target, offset + 1, nodes, primes, upper_bound - current_len);
+                let (maybe_res, steps) = full_optim_inner(next, left2, target, offset + 1, nodes, primes, candidates,upper_bound - current_len);
                 total_steps += steps;
                 if let Some((path, path_len)) = maybe_res {
                     let total_len = current_len + path_len;
@@ -61,7 +64,7 @@ fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usi
                     }
                 }
 
-                if total_steps > 2000000 {
+                if total_steps > 20_000_000 {
                     println!("out! {}", total_steps);
                     break
                 }
@@ -77,7 +80,7 @@ fn full_optim_inner(cur: usize, mut left: Vec<usize>, target: usize, offset: usi
     }
 }
 
-pub fn full_optim(slice: &mut[usize], nodes: &[(f64,f64)], primes: &[bool], offset: usize) -> bool {
+pub fn full_optim(slice: &mut[usize], nodes: &[(f64,f64)], primes: &[bool], candidates: &[Vec<usize>], offset: usize) -> bool {
     //println!("full optim start {}", slice.len());
 
     let left = slice[1..slice.len()-1].to_owned();
@@ -86,7 +89,7 @@ pub fn full_optim(slice: &mut[usize], nodes: &[(f64,f64)], primes: &[bool], offs
 
     let best_len = calculate_len(&nodes, &slice, &primes, offset);
 
-    let (maybe_res, total_steps) = full_optim_inner(start, left, end, offset, nodes, primes, best_len + 0.0001);
+    let (maybe_res, total_steps) = full_optim_inner(start, left, end, offset, nodes, primes, candidates,best_len + 0.0001);
     if let Some((path, path_len)) = maybe_res {
         if path_len < best_len - 0.0001 {
             println!("len {} {} {} {} {}", path_len, best_len, slice.len(), offset % 10, total_steps);

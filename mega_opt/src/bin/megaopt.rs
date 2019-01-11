@@ -16,6 +16,9 @@ use std::fs;
 use std::process::Command;
 use std::time;
 use std::io::stdout;
+use std::hash::Hasher;
+use std::hash::Hash;
+use std::iter;
 
 /// The logistic aka sigmoid function.
 #[inline]
@@ -366,6 +369,9 @@ struct Config {
 
     #[structopt(short = "nho", long = "n-hot-threads", default_value = "2")]
     n_hot_threads: usize,
+
+    #[structopt(long = "min-coverage", default_value = "0")]
+    min_coverage: usize,
 }
 
 struct States {
@@ -453,6 +459,7 @@ fn main() {
     let mut penalty_config: PenaltyConfig = Default::default();
     penalty_config.base_penalty = opt.penalty;
     penalty_config.big_cutoff = opt.big_cutoff;
+    penalty_config.min_coverage = opt.min_coverage;
 
     let primes = Arc::new(get_primes(nodes.len()));
 
@@ -553,9 +560,10 @@ fn main() {
         let prefixacc = format!("{}h", thread_id);
         let base_limit = opt.base_limit;
         let our_pi = pi.clone();
+        let min_coverage = opt.min_coverage;
         let handle = thread::spawn(move || {
-            thread::sleep(time::Duration::new(60, 0));
-            loop {
+            //thread::sleep(time::Duration::new(60, 0));
+            /*loop {
                 let mut tour = if greedy {
                     states_mutex.lock().unwrap().best_tour(thread_id)
                 } else {
@@ -572,6 +580,34 @@ fn main() {
                     println!("thread {}h finished {} {}", thread_id, len, real_len);
                 }
 
+            }*/
+            loop {
+                let mut tour = if greedy {
+                    states_mutex.lock().unwrap().best_tour(thread_id)
+                } else {
+                    states_mutex.lock().unwrap().pick_tour()
+                };
+
+                let mut cc = 0usize;
+                let mut last = 0usize;
+                println!("thread {}h starting {} {}", thread_id, tour.get_len(), tour.get_real_len());
+                let moves = list_moves(&mut tour, &our_candidates, &our_pi, base_limit);
+                let mut scores = moves.iter().enumerate().filter_map(|(i, m)| {
+                    let r = m.range(&tour);
+                    if r.1 - r.0 < min_coverage {
+                        None
+                    } else {
+                        tour.test_changes_fast(&m.added, &m.removed).map(|l| (l, i))
+                    }
+                }).collect::<Vec<_>>();
+
+                scores.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                for &(_, i) in &scores[..50] {
+                    let (_, p) = tour.test_changes(&moves[i].added, &moves[i].removed).unwrap();
+                    let new_tour = tour.make_new(p);
+                    states_mutex.lock().unwrap().add_tour(new_tour);
+                }
+                println!("thread {}h done", thread_id);
             }
         });
         handles.push(handle);
@@ -591,7 +627,7 @@ fn main() {
 
 
                 println!("thread {}m starting {} {}", thread_id, tour.get_len(), tour.get_real_len());
-                let tourm = merge(&tour, &tour2, &prefix, PenaltyConfig{base_penalty: 0.1, ..tour.get_penalty_config()});
+                let tourm = merge(&tour, &tour2, &prefix, tour.get_penalty_config());
                 let len = tourm.get_len();
                 let real_len = tourm.get_real_len();
                 states_mutex.lock().unwrap().add_tour(tourm);
@@ -616,5 +652,209 @@ fn main() {
 
     for handle in handles {
         handle.join().unwrap();
+    }
+}
+
+fn list_moves(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_limit: f64) -> Vec<Move> {
+    let mut ret1 = Vec::new();
+
+    for pos in 1..tour.get_path().len()-1 {
+        let v1 = tour.get_path()[pos];
+        let v2 = tour.get_path()[pos+1];
+        let mut removed = vec![(v1, v2)];
+        let removed_sum = dist_pi(pi, &tour.nodes, v1, v2);
+        ret1.extend(list_all_inner(tour, candidates, pi, base_limit, &mut Vec::new(), &mut removed, v1, v2, 2, 0.0, removed_sum));
+        if pos % 10000 == 0 {
+            println!("p {} rs {}", pos, ret1.len());
+        }
+    }
+
+    let ret_set = ret1.iter().map(|x| x.normalize()).collect::<HashSet<_>>();
+    let ret = ret_set.into_iter().collect::<Vec<_>>();
+
+    println!("2opt {}", ret.iter().map(|m| if m.added.len() == 2 { 1 } else { 0 }).sum::<usize>());
+    println!("3opt {}", ret.iter().map(|m| if m.added.len() == 3 { 1 } else { 0 }).sum::<usize>());
+    println!("4opt {}", ret.iter().map(|m| if m.added.len() == 4 { 1 } else { 0 }).sum::<usize>());
+
+    ret
+}
+
+fn list_patch(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_limit: f64, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, mut all_cycle_parts: Vec<Vec<(usize, usize)>>, mut added_sum: f64, mut removed_sum: f64) -> Vec<Move> {
+    let mut ret = Vec::new();
+    if added_sum - removed_sum > base_limit {
+        return ret;
+    }
+
+    let mut cycle_parts = all_cycle_parts.into_iter().next().unwrap();
+
+    cycle_parts.iter_mut().for_each(|p| {
+        *p = (p.0.min(p.1), p.0.max(p.1))
+    });
+
+    for cp in &cycle_parts {
+        for s in cp.0..cp.1 {
+            let v1 = tour.get_path()[s];
+            let v2 = tour.get_path()[s + 1];
+
+            for &(c1, _) in &candidates[v1] {
+                if c1 == v2 {
+                    continue;
+                }
+
+                let i1 = tour.get_inv()[c1];
+                if cycle_parts.iter().any(|cpx| i1 > cpx.0 && i1 < cpx.1) {
+                    continue
+                }
+                for &(c2, _) in &candidates[v2] {
+                    if c2 == v1 {
+                        continue;
+                    }
+
+                    let i2 = tour.get_inv()[c2];
+                    if cycle_parts.iter().any(|cpx| i2 > cpx.0 && i2 < cpx.1) {
+                        continue
+                    }
+
+
+                    if i2 == i1 + 1 || i2 == i1 - 1 {
+                        added.push((v1, c1));
+                        added_sum += dist_pi(&pi, &tour.nodes, v1, c1);
+                        added.push((v2, c2));
+                        added_sum += dist_pi(&pi, &tour.nodes, v2, c2);
+                        removed.push((v1, v2));
+                        removed_sum += dist_pi(&pi, &tour.nodes, v1, v2);
+                        removed.push((c2, c1));
+                        removed_sum += dist_pi(&pi, &tour.nodes, c2, c1);
+
+                        if added_sum - removed_sum < base_limit {
+                            ret.push(Move{ added: added.clone(), removed: removed.clone(), gain: added_sum - removed_sum});
+                        }
+
+                        added_sum -= dist_pi(&pi, &tour.nodes, v1, c1);
+                        added_sum -= dist_pi(&pi, &tour.nodes, v2, c2);
+                        removed_sum -= dist_pi(&pi, &tour.nodes, v1, v2);
+                        removed_sum -= dist_pi(&pi, &tour.nodes, c2, c1);
+                        added.pop();
+                        added.pop();
+                        removed.pop();
+                        removed.pop();
+                    }
+                }
+            }
+        }
+    }
+
+    ret
+}
+
+fn list_all_inner(tour: &mut Tour, candidates: &[Vec<(usize, f64)>], pi: &[f64], base_limit: f64, added: &mut Vec<(usize, usize)>, removed: &mut Vec<(usize, usize)>, current_vertex: usize, start_vertex2: usize, max_k: usize, mut added_sum: f64, mut removed_sum: f64) -> Vec<Move> {
+    let mut ret = Vec::new();
+    if removed.len() >= 2 {
+        added.push((current_vertex, start_vertex2));
+        added_sum += dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
+        if added_sum - removed_sum < base_limit {
+            //println!("counting");
+            let (cycles, cycle_parts) = tour.count_cycles(&added, &removed);
+            let left = max_k;
+            if cycles > left + 1 && cycles < 1_000_000 {
+            } else if added.len() % 5 == 0 && cycles > 1 {
+            } else {
+                if cycles == 1 {
+                    ret.push(Move { added: added.clone(), removed: removed.clone(), gain: added_sum - removed_sum });
+                } else if cycles == 2 {
+                    ret.extend(list_patch(tour, candidates, pi, base_limit, added, removed, cycle_parts, added_sum, removed_sum));
+                }
+            }
+        }
+
+        added_sum -= dist_pi(&pi, &tour.nodes, current_vertex, start_vertex2);
+        added.pop();
+    }
+    if max_k > 0 {
+        let cand_buf = candidates[current_vertex].iter().filter(|&&(c, d)| d + pi[current_vertex] + pi[c] <= removed_sum - added_sum + base_limit).map(|&x| x.0).collect::<Vec<_>>();
+
+        for &next_vertex in cand_buf.iter() {
+            if next_vertex == 0 || removed.contains(&(current_vertex, next_vertex)) || removed.contains(&(next_vertex, current_vertex)) ||
+                added.contains(&(current_vertex, next_vertex)) || added.contains(&(next_vertex, current_vertex)) {
+                continue;
+            }
+
+            added_sum += dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
+            added.push((current_vertex, next_vertex));
+
+            let current_cands = tour.neighbours(next_vertex);
+            if current_cands[0] != 0 {
+                let current_vertex2 = current_cands[0];
+                if !removed.contains(&(current_vertex2, next_vertex)) && !removed.contains(&(next_vertex, current_vertex2)) &&
+                    !added.contains(&(current_vertex2, next_vertex)) && !added.contains(&(next_vertex, current_vertex2)) {
+                    removed.push((next_vertex, current_vertex2));
+                    removed_sum += dist_pi(&pi, &tour.nodes, current_vertex2, next_vertex);
+                    ret.extend(list_all_inner(tour, candidates, pi, base_limit, added, removed, current_vertex2, start_vertex2,max_k - 1, added_sum, removed_sum));
+                    removed.pop();
+                    removed_sum -= dist_pi(&pi, &tour.nodes, current_vertex2, next_vertex);
+                }
+            }
+            if current_cands[1] != 0 {
+                let current_vertex2 = current_cands[1];
+                if !removed.contains(&(current_vertex2, next_vertex)) && !removed.contains(&(next_vertex, current_vertex2)) &&
+                    !added.contains(&(current_vertex2, next_vertex)) && !added.contains(&(next_vertex, current_vertex2)) {
+                    removed.push((next_vertex, current_vertex2));
+                    removed_sum += dist_pi(&pi, &tour.nodes, current_vertex2, next_vertex);
+                    ret.extend(list_all_inner(tour, candidates, pi, base_limit, added, removed, current_vertex2, start_vertex2,max_k - 1, added_sum, removed_sum));
+                    removed.pop();
+                    removed_sum -= dist_pi(&pi, &tour.nodes, current_vertex2, next_vertex);
+                }
+            }
+
+            added.pop();
+            added_sum -= dist_pi(&pi, &tour.nodes, current_vertex, next_vertex);
+        }
+    }
+
+    ret
+}
+
+#[derive(Debug, Clone)]
+struct Move {
+    added: Vec<(usize, usize)>,
+    removed: Vec<(usize, usize)>,
+    gain: f64
+}
+
+impl Move {
+    fn range(&self, tour: &Tour) -> (usize, usize) {
+        let mut removed_inds = self.removed.iter().map(|x| iter::once(tour.get_inv()[x.0]).chain(iter::once(tour.get_inv()[x.1]))).flatten().collect::<Vec<_>>();
+        let min_removed = *removed_inds.iter().min().unwrap();
+        let max_removed = *removed_inds.iter().max().unwrap();
+        (min_removed, max_removed)
+    }
+}
+
+impl PartialEq for Move {
+    fn eq(&self, other: &Move) -> bool {
+        self.added == other.added && self.removed == other.removed
+    }
+}
+
+impl Eq for Move {}
+
+impl Hash for Move {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.added.hash(state);
+        self.removed.hash(state);
+    }
+}
+
+fn normalize_vec(x: &[(usize, usize)]) -> Vec<(usize, usize)> {
+    let mut ret = x.iter().map(|&(a, b)| { (a.min(b), a.max(b)) }).collect::<Vec<_>>();
+
+    ret.sort();
+
+    ret
+}
+
+impl Move {
+    fn normalize(&self) -> Move {
+        Move { added: normalize_vec(&self.added), removed: normalize_vec(&self.removed), gain: self.gain }
     }
 }
